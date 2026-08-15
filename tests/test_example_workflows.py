@@ -124,7 +124,7 @@ def test_all_suite_nodes_embed_registry_metadata_for_missing_node_resolution():
             seen.add(node_type)
             props = node.get("properties") or {}
             assert props.get("cnr_id") == registry_id, (path.name, node_type, props)
-            assert props.get("ver") == "1.2.1", (path.name, node_type, props)
+            assert props.get("ver") == "1.2.2", (path.name, node_type, props)
             assert props.get("Node name for S&R") == node_type, (path.name, node_type, props)
     # Every release-facing/persistence node used by the shipped workflows should be covered.
     expected_used = {

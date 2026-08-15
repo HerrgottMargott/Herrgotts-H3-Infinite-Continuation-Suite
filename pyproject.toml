@@ -1,6 +1,6 @@
 [project]
 name = "herrgotts-h3-infinite-continuation-suite"
-version = "1.2.1"
+version = "1.2.2"
 description = "Keyframe-anchored MiniMax H3 long-video continuation for ComfyUI with direct AV-latent handover, freeze-safe phase alignment, Safe Tail Bridge, and seamless stitching"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }

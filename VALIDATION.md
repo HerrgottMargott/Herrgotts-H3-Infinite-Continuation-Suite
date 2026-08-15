@@ -1,4 +1,26 @@
-# v1.2.1 validation notes
+# v1.2.2 validation notes
+
+
+## ComfyUI 0.33 compatibility
+
+The v1.2.1 continuation path was live-tested on an updated ComfyUI installation and failed closed at first Continue use with:
+
+```text
+PackedLayout.__init__() got an unexpected keyword argument 'frame_count'
+```
+
+The paired payload hook rolled back successfully, confirming the existing atomic failure behavior. v1.2.2 replaces that version-specific assumption with live API detection.
+
+Automated tests now cover both supported layouts:
+
+- legacy H3 API with `frame_count`: keep the v1.2.1 interior-keyframe + payload compatibility path;
+- native H3 API without `frame_count`: use stock arbitrary keyframe indices, skip the payload monkey patch, and retain only the marker-gated direct-audio timeline correction.
+
+The native path additionally self-tests interior keyframe placement, exact end-aligned audio coordinates, and stock-equivalent behavior for unmarked H3 graphs before installing its wrapper.
+
+A first live Continue generation on ComfyUI 0.33 completed successfully through sampling, saving, visual continuation, audio continuation and the new Last Frame landing. A subsequent Continue in the same ComfyUI process exposed a lifecycle bug in candidate 3: runtime API re-detection inspected the suite's already-installed generic wrapper instead of recognizing it as the active native-mode wrapper. Candidate 4 fixes that repeated-Continue path and adds a regression test that reproduces the Clip 3+ call sequence.
+
+**Repeated live Continue generation on ComfyUI 0.33 was completed successfully after the candidate-4 lifecycle fix.** The tested chain continued again in the same ComfyUI process without the API re-detection failure, confirming Clip 3+ reuse of the already-installed native audio-only layout wrapper.
 
 ## Automated validation
 
@@ -15,7 +37,7 @@ The release regression suite covers:
 - Safe Tail Bridge eligibility, safety-cap behavior and unchanged final timeline duration.
 - Example-workflow model/VAE wiring and release seam defaults.
 
-Current v1.2.1 release-candidate result: **68/68 regression tests passing**.
+Current v1.2.2 release result: **72/72 regression tests passing**.
 
 Run from the repository root:
 

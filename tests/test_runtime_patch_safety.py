@@ -108,7 +108,189 @@ def test_nodepack_import_file_has_no_startup_patch_install_calls():
     assert "from .nodes import NODE_CLASS_MAPPINGS" in text
 
 
-def test_continuation_endpoint_is_marked_for_isolated_layout_patch():
+def test_continuation_keyframe_builder_supports_native_and_legacy_modes():
     text = (ROOT / "nodes.py").read_text(encoding="utf-8")
-    marker = 'HC_INDEX: frame_count - 1'
-    assert marker in text
+    assert 'if runtime_mode == NATIVE_LAYOUT_MODE' in text
+    assert '{"resolved_frame_index": pixel_index, "latent": latent}' in text
+    assert 'HC_INDEX: pixel_index' in text
+
+
+def test_layout_api_detection_distinguishes_legacy_and_native(monkeypatch):
+    pl = _load("patch_layout")
+
+    class Legacy:
+        def __init__(self, text_len, latent_t, latent_h, latent_w, audio_t,
+                     keyframes=None, refs=None, frame_count=None):
+            pass
+
+    monkeypatch.setattr(pl, "_import_mm", lambda: types.SimpleNamespace(PackedLayout=Legacy))
+    mode, sig, err = pl.detect_layout_api()
+    assert err is None
+    assert mode == pl.LEGACY_LAYOUT_MODE
+    assert "frame_count" in sig.parameters
+
+    class Native:
+        def __init__(self, text_len, latent_t, latent_h, latent_w, audio_t,
+                     keyframes=None, refs=None):
+            pass
+
+    monkeypatch.setattr(pl, "_import_mm", lambda: types.SimpleNamespace(PackedLayout=Native))
+    mode, sig, err = pl.detect_layout_api()
+    assert err is None
+    assert mode == pl.NATIVE_LAYOUT_MODE
+    assert "frame_count" not in sig.parameters
+
+
+def test_native_runtime_skips_payload_monkey_patch(monkeypatch):
+    rp = _load("runtime_patches")
+    pl = rp.patch_layout
+    pp = rp.patch_payload
+
+    # Reset module-local state left by any prior test import.
+    monkeypatch.setattr(rp, "_RUNTIME_MODE", None)
+    monkeypatch.setattr(rp, "get_h3_runtime_mode", lambda: pl.NATIVE_LAYOUT_MODE)
+
+    stock = types.SimpleNamespace(state="stock", owner=None, module="comfy.fake")
+    monkeypatch.setattr(pl, "get_layout_patch_status", lambda: (stock, None))
+    monkeypatch.setattr(pp, "get_payload_patch_status", lambda: (stock, None))
+    monkeypatch.setattr(pp, "is_applied", lambda: False)
+
+    called = {"layout": 0, "payload": 0}
+    monkeypatch.setattr(pl, "install_layout_patch", lambda mode=None: called.__setitem__("layout", called["layout"] + 1) or True)
+    monkeypatch.setattr(pp, "install_payload_patch", lambda: called.__setitem__("payload", called["payload"] + 1) or True)
+
+    assert rp.ensure_h3_runtime_patches() == pl.NATIVE_LAYOUT_MODE
+    assert called == {"layout": 1, "payload": 0}
+
+
+def test_native_layout_wrapper_self_test_and_audio_alignment(monkeypatch):
+    import torch
+    pl = _load("patch_layout")
+
+    class NativeLayout:
+        """0.33-style fake: no named `segments`, only packed modality maps."""
+        def __init__(self, text_len, latent_t, latent_h, latent_w, audio_t,
+                     keyframes=None, refs=None):
+            pos_blocks = []
+            img_pos = []
+            img_update = []
+            audio_pos = []
+            audio_update = []
+            row = 0
+
+            def add(times):
+                nonlocal row
+                t = torch.as_tensor(times, dtype=torch.float64).reshape(-1)
+                pos = torch.zeros((t.numel(), 3), dtype=torch.float64)
+                pos[:, 0] = t
+                start = row
+                row += t.numel()
+                pos_blocks.append(pos)
+                return torch.arange(start, row, dtype=torch.long)
+
+            add(torch.arange(text_len, dtype=torch.float64))
+            ref_advance = sum(float(r.get("ref_audio_t", 0)) for r in (refs or []) if r.get("kind") == "audio")
+            target_origin = float(text_len) + ref_advance
+            for kf in keyframes or []:
+                rows = add([target_origin + (5.0 / 3.0) * float(kf["resolved_frame_index"])])
+                img_pos.append(rows)
+                img_update.append(torch.zeros(rows.numel(), dtype=torch.bool))
+            cursor = float(text_len)
+            for r in refs or []:
+                if r.get("kind") == "audio":
+                    rt = int(r.get("ref_audio_t", 0))
+                    # Stereo halves carry the same temporal grid.
+                    ts = torch.cat([cursor + torch.arange(rt, dtype=torch.float64),
+                                    cursor + torch.arange(rt, dtype=torch.float64)])
+                    rows = add(ts)
+                    audio_pos.append(rows)
+                    audio_update.append(torch.zeros(rows.numel(), dtype=torch.bool))
+                    cursor += rt
+            rows = add(torch.cat([cursor + torch.arange(audio_t, dtype=torch.float64),
+                                  cursor + torch.arange(audio_t, dtype=torch.float64)]))
+            audio_pos.append(rows)
+            audio_update.append(torch.ones(rows.numel(), dtype=torch.bool))
+            rows = add([target_origin])
+            img_pos.append(rows)
+            img_update.append(torch.ones(rows.numel(), dtype=torch.bool))
+
+            self.position_ids = torch.cat(pos_blocks, dim=0)
+            self.img_pos = torch.cat(img_pos) if img_pos else torch.empty(0, dtype=torch.long)
+            self.img_update = torch.cat(img_update) if img_update else torch.empty(0, dtype=torch.bool)
+            self.audio_pos = torch.cat(audio_pos) if audio_pos else torch.empty(0, dtype=torch.long)
+            self.audio_update = torch.cat(audio_update) if audio_update else torch.empty(0, dtype=torch.bool)
+
+    fake_mm = types.SimpleNamespace(
+        PackedLayout=NativeLayout,
+        FRAME_RESCALE=5.0 / 3.0,
+        FRAME_PER_TOKEN=(1, 4, 4, 4, 4),
+        _video_t_spans=lambda n: [(5.0 / 3.0) * (1, 4, 4, 4, 4)[i % 5] for i in range(n)],
+    )
+    monkeypatch.setattr(pl, "_import_mm", lambda: fake_mm)
+    monkeypatch.setattr(pl, "_APPLIED", False)
+    monkeypatch.setattr(pl, "_APPLIED_MODE", None)
+    monkeypatch.setattr(pl, "_ORIGINAL_INIT", None)
+    monkeypatch.setattr(pl, "_INSTALLED_WRAPPER", None)
+    monkeypatch.setattr(pl, "_MM", None)
+
+    assert pl.install_layout_patch(pl.NATIVE_LAYOUT_MODE)
+    assert pl.applied_mode() == pl.NATIVE_LAYOUT_MODE
+    refs = [{"kind": "audio", "ref_audio_t": 11, pl.HC_AUDIO_END_FRAME: 5.0}]
+    layout = fake_mm.PackedLayout(7, 7, 22, 38, 16, keyframes=[{"resolved_frame_index": 5}], refs=refs)
+    ref_rows = layout.audio_pos[~layout.audio_update]
+    video_rows = layout.img_pos[layout.img_update]
+    assert abs(float(layout.position_ids[ref_rows, 0].max()) + 1.0 -
+               (float(layout.position_ids[int(video_rows[0]), 0]) + (5.0 / 3.0) * 5.0)) < 1e-9
+
+
+
+def test_native_layout_api_detection_stays_native_after_our_wrapper_is_installed(monkeypatch):
+    """Clip 3+ must not mistake our already-installed wrapper for a new API."""
+    import torch
+    pl = _load("patch_layout")
+
+    class NativeLayout:
+        def __init__(self, text_len, latent_t, latent_h, latent_w, audio_t,
+                     keyframes=None, refs=None):
+            blocks = []
+
+            def add(times):
+                pos = torch.zeros((len(times), 3), dtype=torch.float64)
+                pos[:, 0] = torch.as_tensor(times, dtype=torch.float64)
+                blocks.append(pos)
+
+            add(list(range(text_len)))
+            ref_advance = sum(float(r.get("ref_audio_t", 0)) for r in (refs or []) if r.get("kind") == "audio")
+            target_origin = float(text_len) + ref_advance
+            for kf in keyframes or []:
+                add([target_origin + (5.0 / 3.0) * float(kf["resolved_frame_index"])])
+            cursor = float(text_len)
+            for r in refs or []:
+                if r.get("kind") == "audio":
+                    rt = int(r.get("ref_audio_t", 0))
+                    add(list(cursor + torch.arange(rt, dtype=torch.float64)) * 2)
+                    cursor += rt
+            add(list(cursor + torch.arange(audio_t, dtype=torch.float64)) * 2)
+            add([target_origin])
+            self.position_ids = torch.cat(blocks, dim=0)
+
+    fake_mm = types.SimpleNamespace(
+        PackedLayout=NativeLayout,
+        FRAME_RESCALE=5.0 / 3.0,
+        FRAME_PER_TOKEN=(1, 4, 4, 4, 4),
+        _video_t_spans=lambda n: [(5.0 / 3.0) * (1, 4, 4, 4, 4)[i % 5] for i in range(n)],
+    )
+    monkeypatch.setattr(pl, "_import_mm", lambda: fake_mm)
+    monkeypatch.setattr(pl, "_APPLIED", False)
+    monkeypatch.setattr(pl, "_APPLIED_MODE", None)
+    monkeypatch.setattr(pl, "_ORIGINAL_INIT", None)
+    monkeypatch.setattr(pl, "_INSTALLED_WRAPPER", None)
+    monkeypatch.setattr(pl, "_MM", None)
+
+    assert pl.install_layout_patch(pl.NATIVE_LAYOUT_MODE)
+    # This is exactly what the next Continue calls before building Clip 3.
+    mode, sig, err = pl.detect_layout_api()
+    assert err is None
+    assert mode == pl.NATIVE_LAYOUT_MODE
+    assert sig is not None
+    assert {"text_len", "latent_t", "latent_h", "latent_w", "audio_t", "keyframes", "refs"} <= set(sig.parameters)

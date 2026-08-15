@@ -328,7 +328,7 @@
       "properties": {
         "Node name for S&R": "H3ContinuousStartV11",
         "cnr_id": "herrgotts-h3-infinite-continuation-suite",
-        "ver": "1.2.1"
+        "ver": "1.2.2"
       },
       "widgets_values": [
         "Prompt",
@@ -863,7 +863,7 @@
       "properties": {
         "Node name for S&R": "H3ContinuousSaveLatent",
         "cnr_id": "herrgotts-h3-infinite-continuation-suite",
-        "ver": "1.2.1"
+        "ver": "1.2.2"
       },
       "widgets_values": [
         "h3_continuous/clip",
@@ -940,7 +940,7 @@
       "properties": {
         "Node name for S&R": "H3ContinuousAnalyzeHandoverV11",
         "cnr_id": "herrgotts-h3-infinite-continuation-suite",
-        "ver": "1.2.1"
+        "ver": "1.2.2"
       },
       "widgets_values": [
         "Balanced",
@@ -1031,7 +1031,7 @@
       "properties": {
         "Node name for S&R": "H3ContinuousStitchOutputV11",
         "cnr_id": "herrgotts-h3-infinite-continuation-suite",
-        "ver": "1.2.1"
+        "ver": "1.2.2"
       },
       "widgets_values": [
         "Full"

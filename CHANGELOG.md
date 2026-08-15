@@ -2,6 +2,18 @@
 
 Only major user-facing or technically important milestones are listed here. Experimental micro-iterations are intentionally omitted.
 
+## 1.2.2 — ComfyUI 0.33 compatibility
+
+- Added runtime detection for the new ComfyUI 0.33 MiniMax H3 layout API, where `PackedLayout.__init__` no longer exposes the legacy `frame_count` argument.
+- On the new API, continuation video anchors now use native `resolved_frame_index` placement instead of the old interior-keyframe marker workaround.
+- The legacy `MiniMaxH3.extra_conds` payload monkey patch is skipped on the new API because ComfyUI now preserves keyframes together with reference payloads natively.
+- Retained a much smaller marker-gated layout wrapper only for direct-audio continuation timing. It moves the carried audio latent onto the new clip timeline so its end matches the video continuation boundary.
+- Reworked the native audio timing correction to depend only on the live `position_ids` timeline plus ComfyUI's reference-cursor arithmetic, avoiding assumptions about the refactored 0.33 segment/update-map containers.
+- Added separate live self-tests for legacy and native H3 layout APIs. Unmarked H3 workflows must remain identical to stock behavior in both modes.
+- Fixed repeated Continue calls in one ComfyUI session: runtime detection now recognizes the suite's already-installed native layout wrapper and preserves the original constructor signature for introspection, preventing Clip 3+ from being misidentified as an unknown H3 API.
+- Older ComfyUI H3 layouts remain supported through the existing lazy legacy compatibility path.
+- Updated workflow Registry metadata to `1.2.2`.
+
 ## 1.2.1 — ComfyUI Manager integration hotfix
 
 - Added explicit `node_list.json` coverage for all registered suite nodes.

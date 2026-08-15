@@ -137,7 +137,7 @@
       "properties": {
         "Node name for S&R": "H3ContinuousStitchSavedChainV11",
         "cnr_id": "herrgotts-h3-infinite-continuation-suite",
-        "ver": "1.2.1"
+        "ver": "1.2.2"
       },
       "widgets_values": [
         "h3_continuous/clip",

@@ -18,7 +18,7 @@ from .latent_math import (
     FPS, AUDIO_HZ, FRAME_RESCALE, CONTEXT_TO_STEPS,
     temporal_shape, pixel_frames, context_slice, phase_aware_context_slice, phase_aligned_extended_context_slice, audio_slice_for_pixel_window,
 )
-from .patch_layout import HC_INDEX, HC_AUDIO_END_FRAME
+from .patch_layout import HC_INDEX, HC_AUDIO_END_FRAME, LEGACY_LAYOUT_MODE, NATIVE_LAYOUT_MODE
 from .runtime_patches import ensure_h3_runtime_patches
 from .motion_analysis import analyze_freeze_tail, phase_aware_safety_from_confidence
 from .release_utils import (
@@ -95,10 +95,35 @@ def _prepare_qwen_reference_image(image, width, height, mode):
 
 
 def _require_patches():
-    # v1.1.4: importing/installing the node pack must not alter ComfyUI's H3
-    # runtime. Install the two narrowly marker-gated hooks only when a direct
-    # latent continuation is actually requested.
-    ensure_h3_runtime_patches()
+    # Importing/installing the node pack never alters ComfyUI's H3 runtime.
+    # On first Continue use, runtime_patches selects the legacy workaround or
+    # the ComfyUI 0.33+ native arbitrary-keyframe path and returns that mode.
+    return ensure_h3_runtime_patches()
+
+
+def _continuation_keyframe(pixel_index, latent, runtime_mode):
+    """Build one direct-latent visual anchor for the live ComfyUI H3 API."""
+    pixel_index = int(pixel_index)
+    if runtime_mode == NATIVE_LAYOUT_MODE:
+        # ComfyUI 0.33+ supports interior H3 anchors directly.
+        return {"resolved_frame_index": pixel_index, "latent": latent}
+    if runtime_mode == LEGACY_LAYOUT_MODE:
+        # Older core accepts only endpoints; the lazy layout wrapper moves the
+        # marker onto the requested timeline after stock construction.
+        return {"resolved_frame_index": 0, HC_INDEX: pixel_index, "latent": latent}
+    raise RuntimeError(f"h3_continuous: unknown H3 runtime mode {runtime_mode!r}")
+
+
+def _continuation_condition_values(keyframes, refs, frame_count, runtime_mode):
+    values = {
+        "minimax_keyframes": keyframes,
+        "minimax_refs": refs,
+    }
+    # The legacy PackedLayout needed frame_count to distinguish its final anchor.
+    # ComfyUI 0.33 removed that constructor parameter together with the endpoint-only restriction.
+    if runtime_mode == LEGACY_LAYOUT_MODE:
+        values["minimax_frame_count"] = int(frame_count)
+    return values
 
 
 class H3ContinuousStart:
@@ -198,7 +223,7 @@ class H3ContinuousContinue:
               context_frames="22", handover_mode="auto", alignment_mode="phase_aligned_extended",
               manual_landing_tail_frames=34, ref_image_size="match", handover=None,
               last_frame=None, reference_image=None):
-        _require_patches()
+        runtime_mode = _require_patches()
         context_frames = int(context_frames)
         manual_landing_tail_frames = int(manual_landing_tail_frames)
         alignment_mode = str(alignment_mode).lower()
@@ -320,24 +345,19 @@ class H3ContinuousContinue:
         # offsets for A/B comparison with v0.4.1.
         keyframes = []
         for k, pixel_offset in enumerate(sl["offsets"]):
-            keyframes.append({
-                "resolved_frame_index": 0,
-                HC_INDEX: int(pixel_offset),
-                "latent": source[:, :, k:k + 1],
-            })
+            keyframes.append(
+                _continuation_keyframe(
+                    pixel_offset, source[:, :, k:k + 1], runtime_mode
+                )
+            )
 
         keyframe_images = []
         if last_frame is not None:
             last = _resize(last_frame[:1], width, height, "center")
             keyframe_images.append(last)
-            keyframes.append({
-                # Mark the continuation endpoint too. This lets the v1.1.4
-                # layout wrapper touch only this suite's own keyframes and
-                # leave unrelated stock FL2VA/Ref2VA graphs unchanged.
-                "resolved_frame_index": 0,
-                HC_INDEX: frame_count - 1,
-                "latent": vae.encode(last),
-            })
+            keyframes.append(
+                _continuation_keyframe(frame_count - 1, vae.encode(last), runtime_mode)
+            )
 
         a0, a1, end_error_steps = audio_slice_for_pixel_window(
             prev_audio.shape[-1], sl["source_start_frame"], sl["source_end_frame"]
@@ -365,11 +385,9 @@ class H3ContinuousContinue:
         else:
             tokens = clip.tokenize(prompt)
         cond = clip.encode_from_tokens_scheduled(tokens)
-        cond = node_helpers.conditioning_set_values(cond, {
-            "minimax_keyframes": keyframes,
-            "minimax_frame_count": frame_count,
-            "minimax_refs": refs,
-        })
+        cond = node_helpers.conditioning_set_values(
+            cond, _continuation_condition_values(keyframes, refs, frame_count, runtime_mode)
+        )
 
         ignored_tail = int(sl.get("ignored_tail_frames", previous_frame_count - sl["source_end_frame"]))
         freeze_note = ""
@@ -461,7 +479,7 @@ class H3ContinuousSaveLatent:
         head_context_frames = max(0, int(head_context_frames or 0))
         metadata = {
             "format": "h3_continuous_av_v8",
-            "release_version": "1.2.1",
+            "release_version": "1.2.2",
             "fps": str(FPS),
             "frame_count": str(frame_count),
             "clip_index": str(int(clip_index)),
@@ -1224,7 +1242,7 @@ class H3ContinuousAnalyzeHandoverV11(H3ContinuousAnalyzeHandoverV1):
             result, freeze_hold=effective["freeze_hold"], context_frames=context_frames
         )
         result["release_preset"] = preset_id
-        result["release_version"] = "1.2.1"
+        result["release_version"] = "1.2.2"
         result["version"] = max(int(result.get("version", 0)), 10)
         status = _format_handover_status_v11(result)
         label = {"balanced": "Balanced", "motion_safe": "Motion Safe", "custom": "Custom"}[preset_id]
@@ -1659,7 +1677,7 @@ class H3ContinuousStitchSavedChainV11:
                         raise ValueError(f"Saved Chain Stitch currently supports mono/stereo audio, got {channels} channels")
                     layout = "mono" if channels == 1 else "stereo"
                     output = av.open(out_path, mode="w", options={"movflags": "use_metadata_tags+faststart"})
-                    output.metadata["herrgotts_h3_infinite_version"] = "1.2.1"
+                    output.metadata["herrgotts_h3_infinite_version"] = "1.2.2"
                     output.metadata["clip_range"] = f"{first}-{last}"
                     output.metadata["video_crossfade_frames"] = str(requested_vfade)
                     output.metadata["audio_crossfade_ms"] = str(requested_afade_ms)

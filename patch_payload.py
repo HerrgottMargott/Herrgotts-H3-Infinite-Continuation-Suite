@@ -122,7 +122,7 @@ def install_payload_patch():
     _MODEL_BASE = model_base
     _APPLIED = True
     _LOG.info(
-        "h3_continuous v1.2.1: lazy, marker-gated H3 payload patch installed on first continuation use"
+        "h3_continuous v1.2.2: lazy, marker-gated H3 payload patch installed on first continuation use"
     )
     return True
 
