@@ -14,7 +14,6 @@ def moving_bar_clip(frames=243, lock_start=None, noise=0.0):
     x = torch.zeros(frames, h, w, 3)
     if lock_start is None:
         lock_start = frames
-    # Active frames deliberately never use the final locked position.
     for t in range(min(lock_start, frames)):
         left = (t * 3) % 44
         x[t, 16:32, left:left + 8] = 1.0
@@ -29,24 +28,15 @@ def moving_bar_clip(frames=243, lock_start=None, noise=0.0):
 
 
 def slow_converge_then_lock_clip(frames=243, lock_start=228):
-    """Large image motion becomes progressively smaller before a true final lock.
-
-    This is the failure mode seen with H3: adjacent frames can become very similar
-    well before the exact supplied end-state is actually reached.
-    """
     h, w = 64, 96
     x = torch.zeros(frames, h, w, 3)
     final_left = 70
-    # Earlier motion.
     for t in range(max(0, lock_start - 30)):
         left = (t * 2) % 60
         x[t, 18:50, left:left + 16] = 1.0
-    # Slow approach during the last ~30 active frames. Position changes only
-    # every 2-3 frames, so a generic low-motion detector tends to trigger early.
     begin = max(0, lock_start - 30)
     for t in range(begin, lock_start):
         progress = (t - begin) / max(1, lock_start - begin)
-        # End at final_left-2, never exactly final before lock_start.
         left = int(round(48 + progress * (final_left - 2 - 48)))
         x[t, 18:50, left:left + 16] = 1.0
     final = torch.zeros(h, w, 3)
@@ -61,8 +51,6 @@ def test_final_frame_lock_detects_actual_lock_not_generic_low_motion():
     assert r["detector_mode"] == "stable_tail_consensus"
     assert r["freeze_start_frame"] == 228
     assert r["trailing_locked_frames"] == 15
-    # v0.4.6 default fixed safety=3 targets frame 224; the latest full H3
-    # latent boundary ends at frame 221, extending context backward to phase 0.
     assert r["safety_mode"] == "fixed"
     assert r["phase_aware_effective_safety_margin"] == 3
     assert r["phase_aware_target_end_frame"] == 224
@@ -80,7 +68,6 @@ def test_obvious_lock_is_detected():
     assert r["freeze_start_frame"] == 221
     assert r["trailing_locked_frames"] == 22
     assert r["confidence"] >= 0.80
-    # Fixed safety=3 targets 217; H3 phase alignment lands at frame 216.
     assert r["phase_aware_target_end_frame"] == 217
     assert r["handover_end_frame"] == 216
     assert r["landing_tail_frames"] == 26
@@ -102,7 +89,6 @@ def test_tiny_residual_noise_still_counts_as_lock():
 
 
 def test_short_final_lock_is_not_forced():
-    # Only five locked frames -> below v0.4.6 default freeze_hold=12.
     r = analyze_freeze_tail(moving_bar_clip(lock_start=238))
     assert r["freeze_detected"] is False
     assert r["landing_tail_frames"] == 0
@@ -120,31 +106,20 @@ def test_phase_aligned_metadata_for_lock_213_matches_observed_case():
 
 
 def lock_with_isolated_residual_outlier(frames=243, lock_start=207):
-    """True locked tail with one tiny brightness oscillation near the end.
-
-    Every locked frame remains within the strict final-frame similarity threshold,
-    but one transition exceeds the residual-motion mean threshold. v0.4.3 would
-    truncate the trailing run at that single transition; v0.4.4 must keep the
-    real lock start.
-    """
     h, w = 48, 64
     x = torch.full((frames, h, w, 3), 0.25)
-    # Active pre-lock content stays materially different from final state.
     for t in range(lock_start):
         left = (t * 3) % 44
         x[t, 16:32, left:left + 8] = 0.75
     final = torch.full((h, w, 3), 0.25)
     final[16:32, 50:58] = 0.75
     x[lock_start:] = final
-    # One pair of individually final-matching frames creates one non-static
-    # transition: |(+0.0014) - (-0.0014)| = 0.0028 > 0.0020.
     x[239] = (final + 0.0014).clamp(0, 1)
     x[240] = (final - 0.0014).clamp(0, 1)
     return x
 
 
 def lock_with_sustained_residual_motion(frames=243, lock_start=207):
-    """Frames stay globally close to final but oscillate every frame."""
     h, w = 48, 64
     x = torch.full((frames, h, w, 3), 0.25)
     for t in range(lock_start):
@@ -172,8 +147,6 @@ def test_robust_gate_ignores_isolated_transition_outlier():
 
 def test_robust_gate_rejects_sustained_residual_motion():
     r = analyze_freeze_tail(lock_with_sustained_residual_motion())
-    # The strict final-frame matcher still sees a long near-final suffix, but
-    # sustained alternating motion must prevent it from being accepted as lock.
     assert r["primary_final_match_frames"] >= 6
     assert r["freeze_detected"] is False
     assert r["no_lock_reason"] == "residual_motion_gate_failed"
@@ -181,12 +154,6 @@ def test_robust_gate_rejects_sustained_residual_motion():
 
 
 def stable_tail_with_last_frame_outlier(frames=243, lock_start=215):
-    """28-frame true freeze where frame 242 alone has tiny global decode shimmer.
-
-    A single-final-frame reference makes the other frozen frames appear farther
-    from the final frame than the strict mean threshold. Median tail consensus
-    should still recover the actual lock start.
-    """
     h, w = 48, 64
     x = torch.full((frames, h, w, 3), 0.25)
     for t in range(lock_start):
@@ -195,8 +162,6 @@ def stable_tail_with_last_frame_outlier(frames=243, lock_start=215):
     final = torch.full((h, w, 3), 0.25)
     final[16:32, 50:58] = 0.75
     x[lock_start:] = final
-    # Last decoded frame is an outlier large enough to defeat the old 0.0015
-    # single-reference mean threshold, but still visually just tiny shimmer.
     x[-1] = (final + 0.0018).clamp(0, 1)
     return x
 

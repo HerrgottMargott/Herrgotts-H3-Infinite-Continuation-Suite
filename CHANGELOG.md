@@ -2,6 +2,21 @@
 
 Only major user-facing or technically important milestones are listed here. Experimental micro-iterations are intentionally omitted.
 
+## 1.3.0 — Flexible H3 conditioning and Qwen References
+
+- Added new `H3ContinuousStartV13` and `H3ContinuousContinueV13` class IDs while retaining all v1.2.x nodes unchanged for workflow compatibility.
+- First Frame and Last Frame are independent optional inputs on the new Start node, enabling T2VA, I2VA, L2VA and FL2VA starts from one conditioning node.
+- Keyframes remain the recommended Infinite Continuation workflow even though they are optional: repeated Last Frames provide the visual endpoint / **quality reset** that helps counter drift across long chains.
+- Restored native MiniMax/Qwen Picture priority: connected First Frame is presented first, connected Last Frame second, and additional Qwen References follow consecutively as the next `<Picture N>` inputs.
+- Added Qwen Reference autogrow UX: the node starts with `Qwen Reference 1`; connecting it reveals `Qwen Reference 2`, then 3, and so on up to nine.
+- Qwen References are deliberately text/vision-encoder-only images. They are not inserted into `minimax_refs` and therefore are not native Ref2VA/DiT reference latents.
+- Added a `picture_map` string output and console diagnostic showing the exact Picture-to-input mapping used for the current graph.
+- Live testing confirmed the autogrow UI, First/Last Picture ordering, multiple Qwen References with separate prompt roles, and a longer multi-clip continuation using the new v1.3 Continue node.
+- Continue keeps the proven v1.2 phase-aligned video/audio latent handover, freeze handling and stitching path unchanged. Its direct latent context is not silently decoded and added as a Qwen Picture.
+- Save / Load latent clip indexing remains the proven manual workflow from v1.2.x. No automatic chain-index behavior is introduced in v1.3.
+- Updated all four shipped workflows, in-canvas guidance, example documentation and Registry metadata to v1.3.0.
+- The dynamic Qwen sockets use a small v1-compatible frontend/backend bridge so the existing node pack can keep its stable legacy class registrations instead of requiring an all-at-once V3 migration.
+
 ## 1.2.2 — ComfyUI 0.33 compatibility
 
 - Added runtime detection for the new ComfyUI 0.33 MiniMax H3 layout API, where `PackedLayout.__init__` no longer exposes the legacy `frame_count` argument.

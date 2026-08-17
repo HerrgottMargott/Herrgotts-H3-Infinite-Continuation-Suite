@@ -1,0 +1,3676 @@
+{
+  "id": "herrgotts-h3-infinite-3clip-showcase-v1.3",
+  "revision": 0,
+  "last_node_id": 61,
+  "last_link_id": 104,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "MarkdownNote",
+      "pos": [
+        -2100,
+        -760
+      ],
+      "size": [
+        1600,
+        520
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "START HERE — 3-Clip Infinite Continuation Showcase v1.3",
+      "properties": {},
+      "widgets_values": [
+        "# Herrgotts H3 Infinite v1.3 — 3-Clip Showcase\n\nThis workflow demonstrates the **complete approach in one queue**: flexible H3 Start conditioning, two direct AV-latent continuations, freeze-safe handover analysis, and the proven context-aligned AV stitching path.\n\n### Before you queue\n1. Select the H3 model / Qwen encoder / Video VAE / Audio VAE.\n2. Load the example First Frame + one Last Frame per clip and optionally a shared **Qwen Reference 1**.\n3. Enter a separate prompt for each clip.\n4. Keep resolution and core sampling settings consistent.\n5. Queue once. The final joins use the stable **Safe Tail Bridge max 2 + 4-frame video crossfade + 15 ms audio de-click crossfade** defaults.\n\n### Flexible keyframe modes\nThe v1.3 Start node supports **T2VA, I2VA, L2VA and FL2VA** because First/Last Frames are optional. Continuation Last Frames are optional as well.\n\nFor the Infinite Continuation use case shown here, keyframes remain **recommended**: a fresh Last Frame on each segment gives H3 a repeated endpoint / **quality reset** and helps limit visual drift over a long chain.\n\n### Extend to Clip 4+\nChange Clip 3's role from final to intermediate, duplicate its continuation block for Clip 4, and add one more **Seamless AV Join**. Set only the current last join to `Final Clip`.\n"
+      ],
+      "color": "#1f4d3b",
+      "bgcolor": "#2c6b52"
+    },
+    {
+      "id": 2,
+      "type": "UNETLoader",
+      "pos": [
+        -2050,
+        -100
+      ],
+      "size": [
+        560,
+        90
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            1
+          ]
+        }
+      ],
+      "title": "H3 FL2VA Diffusion Model",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "UNETLoader"
+      },
+      "widgets_values": [
+        "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+        "default"
+      ]
+    },
+    {
+      "id": 3,
+      "type": "CLIPLoader",
+      "pos": [
+        -2050,
+        50
+      ],
+      "size": [
+        560,
+        120
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "CLIP",
+          "type": "CLIP",
+          "links": [
+            4,
+            26,
+            50
+          ]
+        }
+      ],
+      "title": "Qwen3-VL H3 Encoder",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "CLIPLoader"
+      },
+      "widgets_values": [
+        "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+        "minimax",
+        "default"
+      ]
+    },
+    {
+      "id": 4,
+      "type": "VAELoader",
+      "pos": [
+        -2050,
+        220
+      ],
+      "size": [
+        560,
+        70
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "VAE",
+          "type": "VAE",
+          "links": [
+            5,
+            17,
+            27,
+            40,
+            51,
+            64
+          ]
+        }
+      ],
+      "title": "Video VAE",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "VAELoader"
+      },
+      "widgets_values": [
+        "minimax_h3_video_vae_fp16.safetensors"
+      ]
+    },
+    {
+      "id": 5,
+      "type": "VAELoader",
+      "pos": [
+        -2050,
+        330
+      ],
+      "size": [
+        560,
+        70
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "VAE",
+          "type": "VAE",
+          "links": [
+            19,
+            42,
+            66
+          ]
+        }
+      ],
+      "title": "Audio VAE",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "VAELoader"
+      },
+      "widgets_values": [
+        "minimax_h3_audio_vae_fp32.safetensors"
+      ]
+    },
+    {
+      "id": 6,
+      "type": "PathchSageAttentionKJ",
+      "pos": [
+        -1430,
+        -80
+      ],
+      "size": [
+        270,
+        114
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 1
+        }
+      ],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            2
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfyui-kjnodes",
+        "ver": "95389ef411dc9f5e498da928b365b98a682e1cd6",
+        "Node name for S&R": "PathchSageAttentionKJ"
+      },
+      "widgets_values": [
+        "sageattn_qk_int8_pv_fp16_cuda",
+        false
+      ],
+      "title": "Optional SageAttention"
+    },
+    {
+      "id": 7,
+      "type": "MiniMaxH3SigmaShift",
+      "pos": [
+        -1060,
+        -80
+      ],
+      "size": [
+        330,
+        110
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 2
+        }
+      ],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            3,
+            9,
+            32,
+            56
+          ]
+        }
+      ],
+      "title": "Shared H3 Sigma Shift",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "MiniMaxH3SigmaShift"
+      },
+      "widgets_values": [
+        12,
+        3
+      ]
+    },
+    {
+      "id": 8,
+      "type": "KSamplerSelect",
+      "pos": [
+        -1060,
+        80
+      ],
+      "size": [
+        330,
+        70
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "SAMPLER",
+          "type": "SAMPLER",
+          "links": [
+            13,
+            36,
+            60
+          ]
+        }
+      ],
+      "title": "Shared Sampler",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "KSamplerSelect"
+      },
+      "widgets_values": [
+        "res_multistep"
+      ]
+    },
+    {
+      "id": 9,
+      "type": "BasicScheduler",
+      "pos": [
+        -1060,
+        200
+      ],
+      "size": [
+        330,
+        130
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 3
+        }
+      ],
+      "outputs": [
+        {
+          "name": "SIGMAS",
+          "type": "SIGMAS",
+          "links": [
+            14,
+            37,
+            61
+          ]
+        }
+      ],
+      "title": "Shared Scheduler",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "BasicScheduler"
+      },
+      "widgets_values": [
+        "simple",
+        15,
+        1
+      ]
+    },
+    {
+      "id": 10,
+      "type": "MarkdownNote",
+      "pos": [
+        -2050,
+        470
+      ],
+      "size": [
+        990,
+        330
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "INFO — Shared model & sampling setup",
+      "properties": {},
+      "widgets_values": [
+        "### Shared setup\nThe model, encoder, VAEs, Sigma Shift, sampler and scheduler are reused by all three clips so the chain stays consistent.\n\nThis example uses the same values as the tested workflows. SageAttention is optional. If you change resolution, model/VAE or temporal sampling behavior, make the same change for every clip.\n"
+      ],
+      "color": "#3f3f3f",
+      "bgcolor": "#575757"
+    },
+    {
+      "id": 11,
+      "type": "LoadImage",
+      "pos": [
+        -920,
+        420
+      ],
+      "size": [
+        330,
+        340
+      ],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            8,
+            31,
+            55
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": null
+        }
+      ],
+      "title": "Shared Qwen Reference 1",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "3 (5).png",
+        "image"
+      ]
+    },
+    {
+      "id": 12,
+      "type": "MarkdownNote",
+      "pos": [
+        -550,
+        470
+      ],
+      "size": [
+        560,
+        280
+      ],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "INFO — Shared Qwen Reference",
+      "properties": {},
+      "widgets_values": [
+        "### Shared Qwen Reference 1\nOptional Qwen-only identity/style/content guidance used by all three clips in this example. Connecting Qwen Reference 1 on a v1.3 conditioning node reveals Qwen Reference 2, then 3, and so on up to nine.\n\nIt is **not** the temporal continuation source and is not a native Ref2VA/DiT reference latent. Motion and audio continuity come directly from the previous H3 AV latent.\n\nBecause Picture numbering depends on each clip's connected keyframes:\n- Clip 1 here: `Picture 1 = First`, `Picture 2 = Last`, `Picture 3 = Qwen Reference 1`\n- Clip 2/3 here: `Picture 1 = Last`, `Picture 2 = Qwen Reference 1`\n\nCheck each v1.3 node's `picture_map` output / console log when writing prompts.\n"
+      ],
+      "color": "#3f3f3f",
+      "bgcolor": "#575757"
+    },
+    {
+      "id": 13,
+      "type": "LoadImage",
+      "pos": [
+        -2050,
+        850
+      ],
+      "size": [
+        330,
+        340
+      ],
+      "flags": {},
+      "order": 12,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            6
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": null
+        }
+      ],
+      "title": "Clip 1 — First Frame",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "2 (6).png",
+        "image"
+      ]
+    },
+    {
+      "id": 14,
+      "type": "LoadImage",
+      "pos": [
+        -1670,
+        850
+      ],
+      "size": [
+        330,
+        340
+      ],
+      "flags": {},
+      "order": 13,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            7
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": null
+        }
+      ],
+      "title": "Clip 1 — Last Frame",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "2 (6).png",
+        "image"
+      ]
+    },
+    {
+      "id": 15,
+      "type": "H3ContinuousStartV13",
+      "pos": [
+        -1240,
+        870
+      ],
+      "size": [
+        620,
+        500
+      ],
+      "flags": {},
+      "order": 14,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 4
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 5
+        },
+        {
+          "name": "first_frame",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 6
+        },
+        {
+          "name": "last_frame",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 7
+        },
+        {
+          "name": "qwen_reference_1",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 8
+        }
+      ],
+      "outputs": [
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "links": [
+            10
+          ]
+        },
+        {
+          "name": "latent",
+          "type": "LATENT",
+          "links": [
+            15
+          ]
+        },
+        {
+          "name": "picture_map",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "title": "CLIP 1 — Flexible Start / Conditioning v1.3",
+      "properties": {
+        "Node name for S&R": "H3ContinuousStartV13",
+        "cnr_id": "herrgotts-h3-infinite-continuation-suite",
+        "ver": "1.3.0"
+      },
+      "widgets_values": [
+        "Prompt — Clip 1",
+        736,
+        1280,
+        10.0,
+        "match"
+      ]
+    },
+    {
+      "id": 16,
+      "type": "BasicGuider",
+      "pos": [
+        950,
+        1020
+      ],
+      "size": [
+        330,
+        80
+      ],
+      "flags": {},
+      "order": 15,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 9
+        },
+        {
+          "name": "conditioning",
+          "type": "CONDITIONING",
+          "link": 10
+        }
+      ],
+      "outputs": [
+        {
+          "name": "GUIDER",
+          "type": "GUIDER",
+          "links": [
+            12
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "BasicGuider"
+      },
+      "widgets_values": [],
+      "title": "CLIP 1 — Guider"
+    },
+    {
+      "id": 17,
+      "type": "RandomNoise",
+      "pos": [
+        950,
+        1150
+      ],
+      "size": [
+        330,
+        90
+      ],
+      "flags": {},
+      "order": 16,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "NOISE",
+          "type": "NOISE",
+          "links": [
+            11
+          ]
+        }
+      ],
+      "title": "CLIP 1 — Seed",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "RandomNoise"
+      },
+      "widgets_values": [
+        111111111111111,
+        "randomize"
+      ]
+    },
+    {
+      "id": 18,
+      "type": "SamplerCustomAdvanced",
+      "pos": [
+        1340,
+        1040
+      ],
+      "size": [
+        300,
+        180
+      ],
+      "flags": {},
+      "order": 17,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "noise",
+          "type": "NOISE",
+          "link": 11
+        },
+        {
+          "name": "guider",
+          "type": "GUIDER",
+          "link": 12
+        },
+        {
+          "name": "sampler",
+          "type": "SAMPLER",
+          "link": 13
+        },
+        {
+          "name": "sigmas",
+          "type": "SIGMAS",
+          "link": 14
+        },
+        {
+          "name": "latent_image",
+          "type": "LATENT",
+          "link": 15
+        }
+      ],
+      "outputs": [
+        {
+          "name": "output",
+          "type": "LATENT",
+          "links": [
+            16,
+            18,
+            21,
+            28
+          ]
+        },
+        {
+          "name": "denoised_output",
+          "type": "LATENT",
+          "links": null
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "SamplerCustomAdvanced"
+      },
+      "widgets_values": [],
+      "title": "CLIP 1 — Sample"
+    },
+    {
+      "id": 19,
+      "type": "VAEDecode",
+      "pos": [
+        1710,
+        980
+      ],
+      "size": [
+        260,
+        70
+      ],
+      "flags": {},
+      "order": 18,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 16
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 17
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            20,
+            23,
+            101
+          ]
+        }
+      ],
+      "title": "CLIP 1 — Video Decode",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "VAEDecode"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 20,
+      "type": "VAEDecodeAudio",
+      "pos": [
+        1710,
+        1100
+      ],
+      "size": [
+        260,
+        70
+      ],
+      "flags": {},
+      "order": 19,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 18
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 19
+        }
+      ],
+      "outputs": [
+        {
+          "name": "AUDIO",
+          "type": "AUDIO",
+          "links": [
+            25
+          ]
+        }
+      ],
+      "title": "CLIP 1 — Audio Decode",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "VAEDecodeAudio"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 21,
+      "type": "H3ContinuousAnalyzeHandoverV11",
+      "pos": [
+        2130,
+        860
+      ],
+      "size": [
+        460,
+        170
+      ],
+      "flags": {},
+      "order": 20,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 20
+        }
+      ],
+      "outputs": [
+        {
+          "name": "handover",
+          "type": "H3_CONTINUOUS_HANDOVER",
+          "links": [
+            22,
+            24,
+            29,
+            102
+          ]
+        },
+        {
+          "name": "analysis_info",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "name": "freeze_detected",
+          "type": "BOOLEAN",
+          "links": null
+        },
+        {
+          "name": "freeze_start_frame",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "ideal_handover_end_frame",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "phase_aligned_handover_end_frame",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "ignored_tail_frames",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "confidence",
+          "type": "FLOAT",
+          "links": null
+        }
+      ],
+      "title": "CLIP 1 — Auto Handover — Balanced",
+      "properties": {
+        "Node name for S&R": "H3ContinuousAnalyzeHandoverV11",
+        "cnr_id": "herrgotts-h3-infinite-continuation-suite",
+        "ver": "1.3.0"
+      },
+      "widgets_values": [
+        "Balanced",
+        72,
+        8,
+        3,
+        "22",
+        192,
+        0.012,
+        0.025,
+        3.0,
+        0.002,
+        0.01,
+        1.0,
+        70.0,
+        2,
+        15,
+        75.0,
+        3,
+        "fixed"
+      ]
+    },
+    {
+      "id": 22,
+      "type": "H3ContinuousSaveLatent",
+      "pos": [
+        2130,
+        1090
+      ],
+      "size": [
+        360,
+        145
+      ],
+      "flags": {},
+      "order": 21,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "latent",
+          "type": "LATENT",
+          "link": 21
+        },
+        {
+          "name": "handover",
+          "shape": 7,
+          "type": "H3_CONTINUOUS_HANDOVER",
+          "link": 22
+        },
+        {
+          "name": "head_context_frames",
+          "type": "INT",
+          "link": null,
+          "shape": 7
+        }
+      ],
+      "outputs": [
+        {
+          "name": "latent_path",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "name": "latent_info",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "title": "CLIP 1 — Save Full AV Latent",
+      "properties": {
+        "Node name for S&R": "H3ContinuousSaveLatent",
+        "cnr_id": "herrgotts-h3-infinite-continuation-suite",
+        "ver": "1.3.0"
+      },
+      "widgets_values": [
+        "h3_continuous/clip",
+        1
+      ]
+    },
+    {
+      "id": 23,
+      "type": "H3ContinuousStitchOutputV11",
+      "pos": [
+        2650,
+        860
+      ],
+      "size": [
+        390,
+        210
+      ],
+      "flags": {},
+      "order": 22,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 23
+        },
+        {
+          "name": "handover",
+          "shape": 7,
+          "type": "H3_CONTINUOUS_HANDOVER",
+          "link": 24
+        },
+        {
+          "name": "audio",
+          "shape": 7,
+          "type": "AUDIO",
+          "link": 25
+        },
+        {
+          "name": "head_context_frames",
+          "shape": 7,
+          "type": "INT",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": [
+            87
+          ]
+        },
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "links": [
+            90
+          ]
+        },
+        {
+          "name": "trim_info",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "name": "head_trim_frames",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "tail_trim_frames",
+          "type": "INT",
+          "links": null
+        }
+      ],
+      "title": "CLIP 1 — Stitch Ready",
+      "properties": {
+        "Node name for S&R": "H3ContinuousStitchOutputV11",
+        "cnr_id": "herrgotts-h3-infinite-continuation-suite",
+        "ver": "1.3.0"
+      },
+      "widgets_values": [
+        "Stitch Ready"
+      ]
+    },
+    {
+      "id": 24,
+      "type": "MarkdownNote",
+      "pos": [
+        -2050,
+        1230
+      ],
+      "size": [
+        720,
+        320
+      ],
+      "flags": {},
+      "order": 23,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "INFO — Clip 1 inputs / optional modes",
+      "properties": {},
+      "widgets_values": [
+        "### Clip 1\nThis example connects **First Frame + Last Frame**, so Clip 1 runs in FL2VA mode. The v1.3 Start node does not require both:\n- neither = T2VA\n- First only = I2VA\n- Last only = L2VA\n- First + Last = FL2VA\n\nFor a long continuation chain, the shown keyframe setup is recommended because endpoint keyframes repeatedly pull composition / identity / quality back toward a controlled target.\n\n`Duration = 10 s` is only an example. The actual H3 frame count snaps to the model's valid temporal grid.\n"
+      ],
+      "color": "#3f3f3f",
+      "bgcolor": "#575757"
+    },
+    {
+      "id": 25,
+      "type": "MarkdownNote",
+      "pos": [
+        -1240,
+        1400
+      ],
+      "size": [
+        620,
+        290
+      ],
+      "flags": {},
+      "order": 24,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "INFO — Clip 1 Flexible Start",
+      "properties": {},
+      "widgets_values": [
+        "### Flexible Start / Conditioning v1.3\nClip 1 uses the v1.3 flexible Start node. Its connected First/Last Frames are native temporal keyframes **and** receive the first Qwen Picture ordinals. Extra Qwen References follow afterward.\n\nThe sampler output is both decoded for rendering/analysis and passed directly into Clip 2 as the previous AV latent. No rendered frames are used as continuation context.\n\nFirst/Last are optional technically, but keeping keyframe anchors is the recommended Infinite Continuation path because they provide the repeated **quality reset** this suite is designed around.\n"
+      ],
+      "color": "#3f3f3f",
+      "bgcolor": "#575757"
+    },
+    {
+      "id": 26,
+      "type": "MarkdownNote",
+      "pos": [
+        820,
+        1370
+      ],
+      "size": [
+        980,
+        300
+      ],
+      "flags": {},
+      "order": 25,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "INFO — Sampling block",
+      "properties": {},
+      "widgets_values": [
+        "### Per-clip sampling\nEach clip has its own Guider + Noise + Sampler so it can use its own prompt while sharing the same H3 model, sampler type and sigma schedule.\n\nClip 2 cannot sample until Clip 1's handover metadata exists, so execution naturally proceeds in sequence.\n"
+      ],
+      "color": "#3f3f3f",
+      "bgcolor": "#575757"
+    },
+    {
+      "id": 27,
+      "type": "MarkdownNote",
+      "pos": [
+        2110,
+        1320
+      ],
+      "size": [
+        930,
+        310
+      ],
+      "flags": {},
+      "order": 26,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "INFO — Handover + Stitch Ready",
+      "properties": {},
+      "widgets_values": [
+        "### Automatic boundary handling\nAuto Handover finds the usable phase-aligned end of Clip 1 (or applies the no-lock fallback). **Stitch Ready** trims the rendered tail to that exact effective boundary.\n\nThe Save Latent node still stores the **full** AV latent plus metadata; trimming never destroys the continuation source.\n"
+      ],
+      "color": "#66511f",
+      "bgcolor": "#8a6d28"
+    },
+    {
+      "id": 28,
+      "type": "LoadImage",
+      "pos": [
+        -2050,
+        2200
+      ],
+      "size": [
+        330,
+        340
+      ],
+      "flags": {},
+      "order": 27,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            30
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": null
+        }
+      ],
+      "title": "Clip 2 — Last Frame",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "2 (6).png",
+        "image"
+      ]
+    },
+    {
+      "id": 29,
+      "type": "H3ContinuousContinueV13",
+      "pos": [
+        -1570,
+        2210
+      ],
+      "size": [
+        650,
+        660
+      ],
+      "flags": {},
+      "order": 28,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 26
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 27
+        },
+        {
+          "name": "previous_latent",
+          "type": "LATENT",
+          "link": 28
+        },
+        {
+          "name": "handover",
+          "shape": 7,
+          "type": "H3_CONTINUOUS_HANDOVER",
+          "link": 29
+        },
+        {
+          "name": "last_frame",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 30
+        },
+        {
+          "name": "qwen_reference_1",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 31
+        }
+      ],
+      "outputs": [
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "links": [
+            33
+          ]
+        },
+        {
+          "name": "latent",
+          "type": "LATENT",
+          "links": [
+            38
+          ]
+        },
+        {
+          "name": "actual_head_context_frames",
+          "type": "INT",
+          "links": [
+            49,
+            85,
+            89
+          ]
+        },
+        {
+          "name": "ignored_tail_frames",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "handover_info",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "name": "picture_map",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "title": "CLIP 2 — Continue v1.3 from Clip 1",
+      "properties": {
+        "Node name for S&R": "H3ContinuousContinueV13",
+        "cnr_id": "herrgotts-h3-infinite-continuation-suite",
+        "ver": "1.3.0"
+      },
+      "widgets_values": [
+        "Prompt — Clip 2",
+        736,
+        1280,
+        10.0,
+        "22",
+        "auto",
+        "phase_aligned_extended",
+        34,
+        "match"
+      ]
+    },
+    {
+      "id": 30,
+      "type": "BasicGuider",
+      "pos": [
+        950,
+        2370
+      ],
+      "size": [
+        330,
+        80
+      ],
+      "flags": {},
+      "order": 29,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 32
+        },
+        {
+          "name": "conditioning",
+          "type": "CONDITIONING",
+          "link": 33
+        }
+      ],
+      "outputs": [
+        {
+          "name": "GUIDER",
+          "type": "GUIDER",
+          "links": [
+            35
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "BasicGuider"
+      },
+      "widgets_values": [],
+      "title": "CLIP 2 — Guider"
+    },
+    {
+      "id": 31,
+      "type": "RandomNoise",
+      "pos": [
+        950,
+        2500
+      ],
+      "size": [
+        330,
+        90
+      ],
+      "flags": {},
+      "order": 30,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "NOISE",
+          "type": "NOISE",
+          "links": [
+            34
+          ]
+        }
+      ],
+      "title": "CLIP 2 — Seed",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "RandomNoise"
+      },
+      "widgets_values": [
+        222222222222222,
+        "randomize"
+      ]
+    },
+    {
+      "id": 32,
+      "type": "SamplerCustomAdvanced",
+      "pos": [
+        1340,
+        2390
+      ],
+      "size": [
+        300,
+        180
+      ],
+      "flags": {},
+      "order": 31,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "noise",
+          "type": "NOISE",
+          "link": 34
+        },
+        {
+          "name": "guider",
+          "type": "GUIDER",
+          "link": 35
+        },
+        {
+          "name": "sampler",
+          "type": "SAMPLER",
+          "link": 36
+        },
+        {
+          "name": "sigmas",
+          "type": "SIGMAS",
+          "link": 37
+        },
+        {
+          "name": "latent_image",
+          "type": "LATENT",
+          "link": 38
+        }
+      ],
+      "outputs": [
+        {
+          "name": "output",
+          "type": "LATENT",
+          "links": [
+            39,
+            41,
+            44,
+            52
+          ]
+        },
+        {
+          "name": "denoised_output",
+          "type": "LATENT",
+          "links": null
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "SamplerCustomAdvanced"
+      },
+      "widgets_values": [],
+      "title": "CLIP 2 — Sample"
+    },
+    {
+      "id": 33,
+      "type": "VAEDecode",
+      "pos": [
+        1710,
+        2330
+      ],
+      "size": [
+        260,
+        70
+      ],
+      "flags": {},
+      "order": 32,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 39
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 40
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            43,
+            46,
+            88,
+            103
+          ]
+        }
+      ],
+      "title": "CLIP 2 — Video Decode",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "VAEDecode"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 34,
+      "type": "VAEDecodeAudio",
+      "pos": [
+        1710,
+        2450
+      ],
+      "size": [
+        260,
+        70
+      ],
+      "flags": {},
+      "order": 33,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 41
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 42
+        }
+      ],
+      "outputs": [
+        {
+          "name": "AUDIO",
+          "type": "AUDIO",
+          "links": [
+            48,
+            91
+          ]
+        }
+      ],
+      "title": "CLIP 2 — Audio Decode",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "VAEDecodeAudio"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 35,
+      "type": "H3ContinuousAnalyzeHandoverV11",
+      "pos": [
+        2130,
+        2210
+      ],
+      "size": [
+        460,
+        170
+      ],
+      "flags": {},
+      "order": 34,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 43
+        }
+      ],
+      "outputs": [
+        {
+          "name": "handover",
+          "type": "H3_CONTINUOUS_HANDOVER",
+          "links": [
+            45,
+            47,
+            53,
+            92,
+            104
+          ]
+        },
+        {
+          "name": "analysis_info",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "name": "freeze_detected",
+          "type": "BOOLEAN",
+          "links": null
+        },
+        {
+          "name": "freeze_start_frame",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "ideal_handover_end_frame",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "phase_aligned_handover_end_frame",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "ignored_tail_frames",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "confidence",
+          "type": "FLOAT",
+          "links": null
+        }
+      ],
+      "title": "CLIP 2 — Auto Handover — Balanced",
+      "properties": {
+        "Node name for S&R": "H3ContinuousAnalyzeHandoverV11",
+        "cnr_id": "herrgotts-h3-infinite-continuation-suite",
+        "ver": "1.3.0"
+      },
+      "widgets_values": [
+        "Balanced",
+        72,
+        8,
+        3,
+        "22",
+        192,
+        0.012,
+        0.025,
+        3.0,
+        0.002,
+        0.01,
+        1.0,
+        70.0,
+        2,
+        15,
+        75.0,
+        3,
+        "fixed"
+      ]
+    },
+    {
+      "id": 36,
+      "type": "H3ContinuousSaveLatent",
+      "pos": [
+        2130,
+        2440
+      ],
+      "size": [
+        360,
+        145
+      ],
+      "flags": {},
+      "order": 35,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "latent",
+          "type": "LATENT",
+          "link": 44
+        },
+        {
+          "name": "handover",
+          "shape": 7,
+          "type": "H3_CONTINUOUS_HANDOVER",
+          "link": 45
+        },
+        {
+          "name": "head_context_frames",
+          "type": "INT",
+          "link": 85,
+          "shape": 7
+        }
+      ],
+      "outputs": [
+        {
+          "name": "latent_path",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "name": "latent_info",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "title": "CLIP 2 — Save Full AV Latent",
+      "properties": {
+        "Node name for S&R": "H3ContinuousSaveLatent",
+        "cnr_id": "herrgotts-h3-infinite-continuation-suite",
+        "ver": "1.3.0"
+      },
+      "widgets_values": [
+        "h3_continuous/clip",
+        2
+      ]
+    },
+    {
+      "id": 37,
+      "type": "H3ContinuousStitchOutputV11",
+      "pos": [
+        2650,
+        2210
+      ],
+      "size": [
+        390,
+        210
+      ],
+      "flags": {},
+      "order": 36,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 46
+        },
+        {
+          "name": "handover",
+          "shape": 7,
+          "type": "H3_CONTINUOUS_HANDOVER",
+          "link": 47
+        },
+        {
+          "name": "audio",
+          "shape": 7,
+          "type": "AUDIO",
+          "link": 48
+        },
+        {
+          "name": "head_context_frames",
+          "shape": 7,
+          "type": "INT",
+          "link": 49
+        }
+      ],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": null
+        },
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "links": null
+        },
+        {
+          "name": "trim_info",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "name": "head_trim_frames",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "tail_trim_frames",
+          "type": "INT",
+          "links": null
+        }
+      ],
+      "title": "CLIP 2 — Stitch Ready",
+      "properties": {
+        "Node name for S&R": "H3ContinuousStitchOutputV11",
+        "cnr_id": "herrgotts-h3-infinite-continuation-suite",
+        "ver": "1.3.0"
+      },
+      "widgets_values": [
+        "Stitch Ready"
+      ]
+    },
+    {
+      "id": 38,
+      "type": "MarkdownNote",
+      "pos": [
+        -2050,
+        2580
+      ],
+      "size": [
+        440,
+        300
+      ],
+      "flags": {},
+      "order": 37,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "INFO — Clip 2 optional Last Frame",
+      "properties": {},
+      "widgets_values": [
+        "### Clip 2 endpoint\nThe connected **Last Frame** is the visual endpoint / quality-reset keyframe for Clip 2. In v1.3 this input is optional; disconnect it if you intentionally want continuation without a new endpoint anchor.\n\nThe previous clip is **not** supplied as an image. Its motion/audio history arrives through the direct AV latent connection.\n\nFor long chains, keeping a new Last Frame per continuation is still the recommended setup because it gives each segment a fresh visual target.\n"
+      ],
+      "color": "#3f3f3f",
+      "bgcolor": "#575757"
+    },
+    {
+      "id": 39,
+      "type": "MarkdownNote",
+      "pos": [
+        -1570,
+        2900
+      ],
+      "size": [
+        670,
+        390
+      ],
+      "flags": {},
+      "order": 38,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "INFO — Clip 2 Continue v1.3",
+      "properties": {},
+      "widgets_values": [
+        "### Continue from Clip 1\nRecommended settings are already selected:\n- `context_frames = 22`\n- `handover_mode = auto`\n- `alignment_mode = phase_aligned_extended`\n\nThe Continue node may extend the actual head context backward to a canonical H3 phase. Its `actual_head_context_frames` output therefore drives the Stitch Ready **head trim** exactly.\n\nWith this graph's Last Frame + shared Qwen Reference, the Qwen mapping is `Picture 1 = Last Frame`, `Picture 2 = Qwen Reference 1`. The direct latent handover is not a Picture.\n\n**Prompting tip:** describe the action as continuing through the segment rather than strongly instructing the model to settle into the Last Frame. Keep important dialogue away from the very end of a segment, where trimming may occur. If unwanted background music is a problem, try appending `non_diegetic_music: N/A`.\n"
+      ],
+      "color": "#3f3f3f",
+      "bgcolor": "#575757"
+    },
+    {
+      "id": 40,
+      "type": "MarkdownNote",
+      "pos": [
+        2110,
+        2670
+      ],
+      "size": [
+        930,
+        330
+      ],
+      "flags": {},
+      "order": 39,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "INFO — Clip 2 handover / output",
+      "properties": {},
+      "widgets_values": [
+        "### Clip 2 becomes both output and source\nAuto Handover prepares Clip 2 for Clip 3 and the Save node stores its **full latent + actual head-context length**.\n\nThe standalone `Stitch Ready` node remains useful for inspection/export. The final **Seamless AV Join** also receives Clip 2's FULL decoded render and handover metadata so a later boundary can reuse the small Safe Tail Bridge before Clip 3 begins."
+      ],
+      "color": "#66511f",
+      "bgcolor": "#8a6d28"
+    },
+    {
+      "id": 41,
+      "type": "LoadImage",
+      "pos": [
+        -2050,
+        3550
+      ],
+      "size": [
+        330,
+        340
+      ],
+      "flags": {},
+      "order": 40,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            54
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": null
+        }
+      ],
+      "title": "Clip 3 — Last Frame",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "2 (6).png",
+        "image"
+      ]
+    },
+    {
+      "id": 42,
+      "type": "H3ContinuousContinueV13",
+      "pos": [
+        -1570,
+        3560
+      ],
+      "size": [
+        650,
+        660
+      ],
+      "flags": {},
+      "order": 41,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 50
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 51
+        },
+        {
+          "name": "previous_latent",
+          "type": "LATENT",
+          "link": 52
+        },
+        {
+          "name": "handover",
+          "shape": 7,
+          "type": "H3_CONTINUOUS_HANDOVER",
+          "link": 53
+        },
+        {
+          "name": "last_frame",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 54
+        },
+        {
+          "name": "qwen_reference_1",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 55
+        }
+      ],
+      "outputs": [
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "links": [
+            57
+          ]
+        },
+        {
+          "name": "latent",
+          "type": "LATENT",
+          "links": [
+            62
+          ]
+        },
+        {
+          "name": "actual_head_context_frames",
+          "type": "INT",
+          "links": [
+            73,
+            86,
+            95
+          ]
+        },
+        {
+          "name": "ignored_tail_frames",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "handover_info",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "name": "picture_map",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "title": "CLIP 3 — Continue v1.3 from Clip 2",
+      "properties": {
+        "Node name for S&R": "H3ContinuousContinueV13",
+        "cnr_id": "herrgotts-h3-infinite-continuation-suite",
+        "ver": "1.3.0"
+      },
+      "widgets_values": [
+        "Prompt — Clip 3",
+        736,
+        1280,
+        10.0,
+        "22",
+        "auto",
+        "phase_aligned_extended",
+        34,
+        "match"
+      ]
+    },
+    {
+      "id": 43,
+      "type": "BasicGuider",
+      "pos": [
+        950,
+        3720
+      ],
+      "size": [
+        330,
+        80
+      ],
+      "flags": {},
+      "order": 42,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 56
+        },
+        {
+          "name": "conditioning",
+          "type": "CONDITIONING",
+          "link": 57
+        }
+      ],
+      "outputs": [
+        {
+          "name": "GUIDER",
+          "type": "GUIDER",
+          "links": [
+            59
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "BasicGuider"
+      },
+      "widgets_values": [],
+      "title": "CLIP 3 — Guider"
+    },
+    {
+      "id": 44,
+      "type": "RandomNoise",
+      "pos": [
+        950,
+        3850
+      ],
+      "size": [
+        330,
+        90
+      ],
+      "flags": {},
+      "order": 43,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "NOISE",
+          "type": "NOISE",
+          "links": [
+            58
+          ]
+        }
+      ],
+      "title": "CLIP 3 — Seed",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "RandomNoise"
+      },
+      "widgets_values": [
+        333333333333333,
+        "randomize"
+      ]
+    },
+    {
+      "id": 45,
+      "type": "SamplerCustomAdvanced",
+      "pos": [
+        1340,
+        3740
+      ],
+      "size": [
+        300,
+        180
+      ],
+      "flags": {},
+      "order": 44,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "noise",
+          "type": "NOISE",
+          "link": 58
+        },
+        {
+          "name": "guider",
+          "type": "GUIDER",
+          "link": 59
+        },
+        {
+          "name": "sampler",
+          "type": "SAMPLER",
+          "link": 60
+        },
+        {
+          "name": "sigmas",
+          "type": "SIGMAS",
+          "link": 61
+        },
+        {
+          "name": "latent_image",
+          "type": "LATENT",
+          "link": 62
+        }
+      ],
+      "outputs": [
+        {
+          "name": "output",
+          "type": "LATENT",
+          "links": [
+            63,
+            65,
+            68
+          ]
+        },
+        {
+          "name": "denoised_output",
+          "type": "LATENT",
+          "links": null
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "SamplerCustomAdvanced"
+      },
+      "widgets_values": [],
+      "title": "CLIP 3 — Sample"
+    },
+    {
+      "id": 46,
+      "type": "VAEDecode",
+      "pos": [
+        1710,
+        3680
+      ],
+      "size": [
+        260,
+        70
+      ],
+      "flags": {},
+      "order": 45,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 63
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 64
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            67,
+            70,
+            94
+          ]
+        }
+      ],
+      "title": "CLIP 3 — Video Decode",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "VAEDecode"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 47,
+      "type": "VAEDecodeAudio",
+      "pos": [
+        1710,
+        3800
+      ],
+      "size": [
+        260,
+        70
+      ],
+      "flags": {},
+      "order": 46,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 65
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 66
+        }
+      ],
+      "outputs": [
+        {
+          "name": "AUDIO",
+          "type": "AUDIO",
+          "links": [
+            72,
+            97
+          ]
+        }
+      ],
+      "title": "CLIP 3 — Audio Decode",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "VAEDecodeAudio"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 48,
+      "type": "H3ContinuousAnalyzeHandoverV11",
+      "pos": [
+        2130,
+        3560
+      ],
+      "size": [
+        460,
+        170
+      ],
+      "flags": {},
+      "order": 47,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 67
+        }
+      ],
+      "outputs": [
+        {
+          "name": "handover",
+          "type": "H3_CONTINUOUS_HANDOVER",
+          "links": [
+            69,
+            71,
+            98
+          ]
+        },
+        {
+          "name": "analysis_info",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "name": "freeze_detected",
+          "type": "BOOLEAN",
+          "links": null
+        },
+        {
+          "name": "freeze_start_frame",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "ideal_handover_end_frame",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "phase_aligned_handover_end_frame",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "ignored_tail_frames",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "confidence",
+          "type": "FLOAT",
+          "links": null
+        }
+      ],
+      "title": "CLIP 3 — Auto Handover — Balanced",
+      "properties": {
+        "Node name for S&R": "H3ContinuousAnalyzeHandoverV11",
+        "cnr_id": "herrgotts-h3-infinite-continuation-suite",
+        "ver": "1.3.0"
+      },
+      "widgets_values": [
+        "Balanced",
+        72,
+        8,
+        3,
+        "22",
+        192,
+        0.012,
+        0.025,
+        3.0,
+        0.002,
+        0.01,
+        1.0,
+        70.0,
+        2,
+        15,
+        75.0,
+        3,
+        "fixed"
+      ]
+    },
+    {
+      "id": 49,
+      "type": "H3ContinuousSaveLatent",
+      "pos": [
+        2130,
+        3790
+      ],
+      "size": [
+        360,
+        145
+      ],
+      "flags": {},
+      "order": 48,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "latent",
+          "type": "LATENT",
+          "link": 68
+        },
+        {
+          "name": "handover",
+          "shape": 7,
+          "type": "H3_CONTINUOUS_HANDOVER",
+          "link": 69
+        },
+        {
+          "name": "head_context_frames",
+          "type": "INT",
+          "link": 86,
+          "shape": 7
+        }
+      ],
+      "outputs": [
+        {
+          "name": "latent_path",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "name": "latent_info",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "title": "CLIP 3 — Save Full AV Latent",
+      "properties": {
+        "Node name for S&R": "H3ContinuousSaveLatent",
+        "cnr_id": "herrgotts-h3-infinite-continuation-suite",
+        "ver": "1.3.0"
+      },
+      "widgets_values": [
+        "h3_continuous/clip",
+        3
+      ]
+    },
+    {
+      "id": 50,
+      "type": "H3ContinuousStitchOutputV11",
+      "pos": [
+        2650,
+        3560
+      ],
+      "size": [
+        390,
+        210
+      ],
+      "flags": {},
+      "order": 49,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 70
+        },
+        {
+          "name": "handover",
+          "shape": 7,
+          "type": "H3_CONTINUOUS_HANDOVER",
+          "link": 71
+        },
+        {
+          "name": "audio",
+          "shape": 7,
+          "type": "AUDIO",
+          "link": 72
+        },
+        {
+          "name": "head_context_frames",
+          "shape": 7,
+          "type": "INT",
+          "link": 73
+        }
+      ],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": null
+        },
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "links": null
+        },
+        {
+          "name": "trim_info",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "name": "head_trim_frames",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "tail_trim_frames",
+          "type": "INT",
+          "links": null
+        }
+      ],
+      "title": "CLIP 3 — Final Clip",
+      "properties": {
+        "Node name for S&R": "H3ContinuousStitchOutputV11",
+        "cnr_id": "herrgotts-h3-infinite-continuation-suite",
+        "ver": "1.3.0"
+      },
+      "widgets_values": [
+        "Final Clip"
+      ]
+    },
+    {
+      "id": 51,
+      "type": "MarkdownNote",
+      "pos": [
+        -2050,
+        3930
+      ],
+      "size": [
+        440,
+        300
+      ],
+      "flags": {},
+      "order": 50,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "INFO — Clip 3 optional Last Frame",
+      "properties": {},
+      "widgets_values": [
+        "### Clip 3 endpoint\nThis example uses another **Last Frame** as the third visual endpoint / quality reset. It is optional in v1.3, but recommended when your goal is to periodically reset composition, identity and image quality through a long chain.\n\nChange the prompt and endpoint independently while preserving the character/environment constraints you want carried through the sequence.\n"
+      ],
+      "color": "#3f3f3f",
+      "bgcolor": "#575757"
+    },
+    {
+      "id": 52,
+      "type": "MarkdownNote",
+      "pos": [
+        -1570,
+        4250
+      ],
+      "size": [
+        670,
+        390
+      ],
+      "flags": {},
+      "order": 51,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "INFO — Clip 3 / Final Clip / easy extension",
+      "properties": {},
+      "widgets_values": [
+        "### Continue from Clip 2\nThis v1.3 continuation block is the template for every additional clip. Last Frame is optional and Qwen References can grow from Reference 1 to Reference 9 as needed.\n\nThe standalone `Final Clip` node is optional. In the automatic chain, the final **Seamless AV Join** receives Clip 3's FULL decoded render and is set to `Final Clip`, so the reused head is removed while the complete endpoint landing is preserved.\n\nTo add Clip 4, duplicate this continuation block and add one more Seamless AV Join after the current combined output. Connect Clip 3's full decoded video + handover as the new join's **previous bridge source**.\n"
+      ],
+      "color": "#3f3f3f",
+      "bgcolor": "#575757"
+    },
+    {
+      "id": 53,
+      "type": "MarkdownNote",
+      "pos": [
+        2110,
+        4020
+      ],
+      "size": [
+        930,
+        330
+      ],
+      "flags": {},
+      "order": 52,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "INFO — Final clip handover",
+      "properties": {},
+      "widgets_values": [
+        "### Why still analyze the final clip?\nAuto Handover still runs on Clip 3 so its full latent and continuation metadata remain ready if you later extend the chain.\n\nFor the **finished 3-clip video**, `Final Clip` intentionally ignores that tail cutoff: it removes only the reused head overlap and preserves the complete final-keyframe landing.\n\nIf you add Clip 4 later, switch Clip 3 back to `Stitch Ready` and use `Final Clip` on the new last segment.\n"
+      ],
+      "color": "#66511f",
+      "bgcolor": "#8a6d28"
+    },
+    {
+      "id": 58,
+      "type": "CreateVideo",
+      "pos": [
+        4520,
+        2320
+      ],
+      "size": [
+        300,
+        120
+      ],
+      "flags": {},
+      "order": 55,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 99
+        },
+        {
+          "name": "audio",
+          "shape": 7,
+          "type": "AUDIO",
+          "link": 100
+        }
+      ],
+      "outputs": [
+        {
+          "name": "VIDEO",
+          "type": "VIDEO",
+          "links": [
+            84
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "CreateVideo"
+      },
+      "widgets_values": [
+        24,
+        8
+      ],
+      "title": "FINAL — Create Stitched Video"
+    },
+    {
+      "id": 59,
+      "type": "SaveVideo",
+      "pos": [
+        4880,
+        2320
+      ],
+      "size": [
+        432.1166687011719,
+        126
+      ],
+      "flags": {},
+      "order": 56,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "video",
+          "type": "VIDEO",
+          "link": 84
+        }
+      ],
+      "outputs": [
+        {
+          "name": "video",
+          "type": "VIDEO",
+          "links": null
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "SaveVideo"
+      },
+      "widgets_values": [
+        "video/Herrgotts_H3_Infinite_3Clip_Stitched",
+        "auto",
+        "auto"
+      ],
+      "title": "FINAL — Save 3-Clip Video"
+    },
+    {
+      "id": 60,
+      "type": "MarkdownNote",
+      "pos": [
+        3300,
+        1650
+      ],
+      "size": [
+        640,
+        500
+      ],
+      "flags": {},
+      "order": 59,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "FINAL STEP — Automatic AV stitching",
+      "properties": {},
+      "widgets_values": [
+        "# Automatic seamless AV stitching\nThe final stage uses the reused context that already exists around every continuation boundary.\n\n- **Safe Tail Bridge (recommended):** H3 sometimes has 1–3 visually valid frames between the phase-aligned latent cutoff and the detector's safe ideal end. The stitcher can keep up to **2** of those exact pixels from the previous clip and skips the same number of early video frames from the next clip. It never borrows from the freeze safety margin and does not change duration.\n- **Video:** after the bridge, the final **4** corresponding context frames are cosine-blended. Keep this short to avoid ghosting.\n- **Audio:** the already-tested **15 ms de-click crossfade** remains independent. Safe Tail Bridge does not move the audio boundary, so A/V timing stays unchanged.\n- **Boundary luminance match:** retained only as an optional experimental fallback and **OFF by default**. Earlier tests showed that gain matching could turn a hard brightness seam into a visible brightness drift.\n- Clip 1/2 remain intermediate segments; the current last clip is joined as `Final Clip`, so its complete final-keyframe landing remains.\n\nSet `max_safe_tail_bridge_frames = 0` to disable the bridge. Set either crossfade to `0` to compare against hard cuts."
+      ],
+      "color": "#1f4d3b",
+      "bgcolor": "#2c6b52"
+    },
+    {
+      "id": 61,
+      "type": "MarkdownNote",
+      "pos": [
+        3340,
+        2760
+      ],
+      "size": [
+        820,
+        320
+      ],
+      "flags": {},
+      "order": 60,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "INFO — Extending the final stitch",
+      "properties": {},
+      "widgets_values": [
+        "### Adding Clip 4+\nDuplicate the last continuation block and add **one more Seamless AV Join** after the current combined output.\n\nFor every new join:\n1. previous images/audio = output of the preceding Seamless AV Join,\n2. next images/audio = the **FULL decoded render** of the new clip,\n3. next head context = `actual_head_context_frames` from that clip's Continue node,\n4. next handover = that clip's Auto Handover,\n5. **previous_full_images + previous_handover** = the full decoded render and handover of the clip immediately before it; these enable Safe Tail Bridge,\n6. use `Stitch Ready` for intermediate clips and `Final Clip` only for the current last clip.\n\nFor very long projects, use **04 — Stitch Saved Chain** instead; it performs the same boundary logic while decoding/writing one saved clip at a time."
+      ],
+      "color": "#3f3f3f",
+      "bgcolor": "#575757"
+    },
+    {
+      "id": 54,
+      "type": "H3ContinuousSeamlessJoinV11",
+      "pos": [
+        3340,
+        2260
+      ],
+      "size": [
+        540,
+        450
+      ],
+      "flags": {},
+      "order": 53,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "previous_images",
+          "type": "IMAGE",
+          "link": 87
+        },
+        {
+          "name": "next_images",
+          "type": "IMAGE",
+          "link": 88
+        },
+        {
+          "name": "next_head_context_frames",
+          "shape": 7,
+          "type": "INT",
+          "link": 89
+        },
+        {
+          "name": "previous_audio",
+          "shape": 7,
+          "type": "AUDIO",
+          "link": 90
+        },
+        {
+          "name": "next_audio",
+          "shape": 7,
+          "type": "AUDIO",
+          "link": 91
+        },
+        {
+          "name": "next_handover",
+          "shape": 7,
+          "type": "H3_CONTINUOUS_HANDOVER",
+          "link": 92
+        },
+        {
+          "name": "previous_full_images",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 101
+        },
+        {
+          "name": "previous_handover",
+          "shape": 7,
+          "type": "H3_CONTINUOUS_HANDOVER",
+          "link": 102
+        }
+      ],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": [
+            93
+          ]
+        },
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "links": [
+            96
+          ]
+        },
+        {
+          "name": "join_info",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "H3ContinuousSeamlessJoinV11",
+        "cnr_id": "herrgotts-h3-infinite-continuation-suite",
+        "ver": "1.3.0"
+      },
+      "widgets_values": [
+        "Stitch Ready",
+        4,
+        15.0,
+        false,
+        16,
+        10.0,
+        2
+      ],
+      "title": "SEAMLESS JOIN — Clip 1 + Clip 2"
+    },
+    {
+      "id": 55,
+      "type": "H3ContinuousSeamlessJoinV11",
+      "pos": [
+        3930,
+        2260
+      ],
+      "size": [
+        540,
+        450
+      ],
+      "flags": {},
+      "order": 54,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "previous_images",
+          "type": "IMAGE",
+          "link": 93
+        },
+        {
+          "name": "next_images",
+          "type": "IMAGE",
+          "link": 94
+        },
+        {
+          "name": "next_head_context_frames",
+          "shape": 7,
+          "type": "INT",
+          "link": 95
+        },
+        {
+          "name": "previous_audio",
+          "shape": 7,
+          "type": "AUDIO",
+          "link": 96
+        },
+        {
+          "name": "next_audio",
+          "shape": 7,
+          "type": "AUDIO",
+          "link": 97
+        },
+        {
+          "name": "next_handover",
+          "shape": 7,
+          "type": "H3_CONTINUOUS_HANDOVER",
+          "link": 98
+        },
+        {
+          "name": "previous_full_images",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 103
+        },
+        {
+          "name": "previous_handover",
+          "shape": 7,
+          "type": "H3_CONTINUOUS_HANDOVER",
+          "link": 104
+        }
+      ],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": [
+            99
+          ]
+        },
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "links": [
+            100
+          ]
+        },
+        {
+          "name": "join_info",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "H3ContinuousSeamlessJoinV11",
+        "cnr_id": "herrgotts-h3-infinite-continuation-suite",
+        "ver": "1.3.0"
+      },
+      "widgets_values": [
+        "Final Clip",
+        4,
+        15.0,
+        false,
+        16,
+        10.0,
+        2
+      ],
+      "title": "SEAMLESS JOIN — + Clip 3"
+    }
+  ],
+  "links": [
+    [
+      1,
+      2,
+      0,
+      6,
+      0,
+      "MODEL"
+    ],
+    [
+      2,
+      6,
+      0,
+      7,
+      0,
+      "MODEL"
+    ],
+    [
+      3,
+      7,
+      0,
+      9,
+      0,
+      "MODEL"
+    ],
+    [
+      4,
+      3,
+      0,
+      15,
+      0,
+      "CLIP"
+    ],
+    [
+      5,
+      4,
+      0,
+      15,
+      1,
+      "VAE"
+    ],
+    [
+      6,
+      13,
+      0,
+      15,
+      2,
+      "IMAGE"
+    ],
+    [
+      7,
+      14,
+      0,
+      15,
+      3,
+      "IMAGE"
+    ],
+    [
+      8,
+      11,
+      0,
+      15,
+      4,
+      "IMAGE"
+    ],
+    [
+      9,
+      7,
+      0,
+      16,
+      0,
+      "MODEL"
+    ],
+    [
+      10,
+      15,
+      0,
+      16,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      11,
+      17,
+      0,
+      18,
+      0,
+      "NOISE"
+    ],
+    [
+      12,
+      16,
+      0,
+      18,
+      1,
+      "GUIDER"
+    ],
+    [
+      13,
+      8,
+      0,
+      18,
+      2,
+      "SAMPLER"
+    ],
+    [
+      14,
+      9,
+      0,
+      18,
+      3,
+      "SIGMAS"
+    ],
+    [
+      15,
+      15,
+      1,
+      18,
+      4,
+      "LATENT"
+    ],
+    [
+      16,
+      18,
+      0,
+      19,
+      0,
+      "LATENT"
+    ],
+    [
+      17,
+      4,
+      0,
+      19,
+      1,
+      "VAE"
+    ],
+    [
+      18,
+      18,
+      0,
+      20,
+      0,
+      "LATENT"
+    ],
+    [
+      19,
+      5,
+      0,
+      20,
+      1,
+      "VAE"
+    ],
+    [
+      20,
+      19,
+      0,
+      21,
+      0,
+      "IMAGE"
+    ],
+    [
+      21,
+      18,
+      0,
+      22,
+      0,
+      "LATENT"
+    ],
+    [
+      22,
+      21,
+      0,
+      22,
+      1,
+      "H3_CONTINUOUS_HANDOVER"
+    ],
+    [
+      23,
+      19,
+      0,
+      23,
+      0,
+      "IMAGE"
+    ],
+    [
+      24,
+      21,
+      0,
+      23,
+      1,
+      "H3_CONTINUOUS_HANDOVER"
+    ],
+    [
+      25,
+      20,
+      0,
+      23,
+      2,
+      "AUDIO"
+    ],
+    [
+      26,
+      3,
+      0,
+      29,
+      0,
+      "CLIP"
+    ],
+    [
+      27,
+      4,
+      0,
+      29,
+      1,
+      "VAE"
+    ],
+    [
+      28,
+      18,
+      0,
+      29,
+      2,
+      "LATENT"
+    ],
+    [
+      29,
+      21,
+      0,
+      29,
+      3,
+      "H3_CONTINUOUS_HANDOVER"
+    ],
+    [
+      30,
+      28,
+      0,
+      29,
+      4,
+      "IMAGE"
+    ],
+    [
+      31,
+      11,
+      0,
+      29,
+      5,
+      "IMAGE"
+    ],
+    [
+      32,
+      7,
+      0,
+      30,
+      0,
+      "MODEL"
+    ],
+    [
+      33,
+      29,
+      0,
+      30,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      34,
+      31,
+      0,
+      32,
+      0,
+      "NOISE"
+    ],
+    [
+      35,
+      30,
+      0,
+      32,
+      1,
+      "GUIDER"
+    ],
+    [
+      36,
+      8,
+      0,
+      32,
+      2,
+      "SAMPLER"
+    ],
+    [
+      37,
+      9,
+      0,
+      32,
+      3,
+      "SIGMAS"
+    ],
+    [
+      38,
+      29,
+      1,
+      32,
+      4,
+      "LATENT"
+    ],
+    [
+      39,
+      32,
+      0,
+      33,
+      0,
+      "LATENT"
+    ],
+    [
+      40,
+      4,
+      0,
+      33,
+      1,
+      "VAE"
+    ],
+    [
+      41,
+      32,
+      0,
+      34,
+      0,
+      "LATENT"
+    ],
+    [
+      42,
+      5,
+      0,
+      34,
+      1,
+      "VAE"
+    ],
+    [
+      43,
+      33,
+      0,
+      35,
+      0,
+      "IMAGE"
+    ],
+    [
+      44,
+      32,
+      0,
+      36,
+      0,
+      "LATENT"
+    ],
+    [
+      45,
+      35,
+      0,
+      36,
+      1,
+      "H3_CONTINUOUS_HANDOVER"
+    ],
+    [
+      46,
+      33,
+      0,
+      37,
+      0,
+      "IMAGE"
+    ],
+    [
+      47,
+      35,
+      0,
+      37,
+      1,
+      "H3_CONTINUOUS_HANDOVER"
+    ],
+    [
+      48,
+      34,
+      0,
+      37,
+      2,
+      "AUDIO"
+    ],
+    [
+      49,
+      29,
+      2,
+      37,
+      3,
+      "INT"
+    ],
+    [
+      50,
+      3,
+      0,
+      42,
+      0,
+      "CLIP"
+    ],
+    [
+      51,
+      4,
+      0,
+      42,
+      1,
+      "VAE"
+    ],
+    [
+      52,
+      32,
+      0,
+      42,
+      2,
+      "LATENT"
+    ],
+    [
+      53,
+      35,
+      0,
+      42,
+      3,
+      "H3_CONTINUOUS_HANDOVER"
+    ],
+    [
+      54,
+      41,
+      0,
+      42,
+      4,
+      "IMAGE"
+    ],
+    [
+      55,
+      11,
+      0,
+      42,
+      5,
+      "IMAGE"
+    ],
+    [
+      56,
+      7,
+      0,
+      43,
+      0,
+      "MODEL"
+    ],
+    [
+      57,
+      42,
+      0,
+      43,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      58,
+      44,
+      0,
+      45,
+      0,
+      "NOISE"
+    ],
+    [
+      59,
+      43,
+      0,
+      45,
+      1,
+      "GUIDER"
+    ],
+    [
+      60,
+      8,
+      0,
+      45,
+      2,
+      "SAMPLER"
+    ],
+    [
+      61,
+      9,
+      0,
+      45,
+      3,
+      "SIGMAS"
+    ],
+    [
+      62,
+      42,
+      1,
+      45,
+      4,
+      "LATENT"
+    ],
+    [
+      63,
+      45,
+      0,
+      46,
+      0,
+      "LATENT"
+    ],
+    [
+      64,
+      4,
+      0,
+      46,
+      1,
+      "VAE"
+    ],
+    [
+      65,
+      45,
+      0,
+      47,
+      0,
+      "LATENT"
+    ],
+    [
+      66,
+      5,
+      0,
+      47,
+      1,
+      "VAE"
+    ],
+    [
+      67,
+      46,
+      0,
+      48,
+      0,
+      "IMAGE"
+    ],
+    [
+      68,
+      45,
+      0,
+      49,
+      0,
+      "LATENT"
+    ],
+    [
+      69,
+      48,
+      0,
+      49,
+      1,
+      "H3_CONTINUOUS_HANDOVER"
+    ],
+    [
+      70,
+      46,
+      0,
+      50,
+      0,
+      "IMAGE"
+    ],
+    [
+      71,
+      48,
+      0,
+      50,
+      1,
+      "H3_CONTINUOUS_HANDOVER"
+    ],
+    [
+      72,
+      47,
+      0,
+      50,
+      2,
+      "AUDIO"
+    ],
+    [
+      73,
+      42,
+      2,
+      50,
+      3,
+      "INT"
+    ],
+    [
+      84,
+      58,
+      0,
+      59,
+      0,
+      "VIDEO"
+    ],
+    [
+      85,
+      29,
+      2,
+      36,
+      2,
+      "INT"
+    ],
+    [
+      86,
+      42,
+      2,
+      49,
+      2,
+      "INT"
+    ],
+    [
+      87,
+      23,
+      0,
+      54,
+      0,
+      "IMAGE"
+    ],
+    [
+      88,
+      33,
+      0,
+      54,
+      1,
+      "IMAGE"
+    ],
+    [
+      89,
+      29,
+      2,
+      54,
+      2,
+      "INT"
+    ],
+    [
+      90,
+      23,
+      1,
+      54,
+      3,
+      "AUDIO"
+    ],
+    [
+      91,
+      34,
+      0,
+      54,
+      4,
+      "AUDIO"
+    ],
+    [
+      92,
+      35,
+      0,
+      54,
+      5,
+      "H3_CONTINUOUS_HANDOVER"
+    ],
+    [
+      93,
+      54,
+      0,
+      55,
+      0,
+      "IMAGE"
+    ],
+    [
+      94,
+      46,
+      0,
+      55,
+      1,
+      "IMAGE"
+    ],
+    [
+      95,
+      42,
+      2,
+      55,
+      2,
+      "INT"
+    ],
+    [
+      96,
+      54,
+      1,
+      55,
+      3,
+      "AUDIO"
+    ],
+    [
+      97,
+      47,
+      0,
+      55,
+      4,
+      "AUDIO"
+    ],
+    [
+      98,
+      48,
+      0,
+      55,
+      5,
+      "H3_CONTINUOUS_HANDOVER"
+    ],
+    [
+      99,
+      55,
+      0,
+      58,
+      0,
+      "IMAGE"
+    ],
+    [
+      100,
+      55,
+      1,
+      58,
+      1,
+      "AUDIO"
+    ],
+    [
+      101,
+      19,
+      0,
+      54,
+      6,
+      "IMAGE"
+    ],
+    [
+      102,
+      21,
+      0,
+      54,
+      7,
+      "H3_CONTINUOUS_HANDOVER"
+    ],
+    [
+      103,
+      33,
+      0,
+      55,
+      6,
+      "IMAGE"
+    ],
+    [
+      104,
+      35,
+      0,
+      55,
+      7,
+      "H3_CONTINUOUS_HANDOVER"
+    ]
+  ],
+  "groups": [
+    {
+      "id": 1,
+      "title": "SHARED — Models / Sampling / Reference",
+      "bounding": [
+        -2100,
+        -170,
+        2130,
+        1000
+      ],
+      "color": "#3f789e",
+      "flags": {}
+    },
+    {
+      "id": 2,
+      "title": "CLIP 1 — Native FFLF Start",
+      "bounding": [
+        -2100,
+        820,
+        5180,
+        1120
+      ],
+      "color": "#4d8f6a",
+      "flags": {}
+    },
+    {
+      "id": 3,
+      "title": "CLIP 2 — Direct AV-Latent Continuation",
+      "bounding": [
+        -2100,
+        2170,
+        5180,
+        1120
+      ],
+      "color": "#8064a2",
+      "flags": {}
+    },
+    {
+      "id": 4,
+      "title": "CLIP 3 — Direct AV-Latent Continuation",
+      "bounding": [
+        -2100,
+        3520,
+        5180,
+        1120
+      ],
+      "color": "#a06d45",
+      "flags": {}
+    },
+    {
+      "id": 5,
+      "title": "5 — Context-Aligned Seamless AV Stitch",
+      "bounding": [
+        3260,
+        1740,
+        1900,
+        1330
+      ],
+      "color": "#2e7d62",
+      "flags": {}
+    }
+  ],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.34,
+      "offset": [
+        860,
+        420
+      ]
+    },
+    "frontendVersion": "1.47.12",
+    "VHS_latentpreview": false,
+    "VHS_latentpreviewrate": 0,
+    "VHS_MetadataImage": true,
+    "VHS_KeepIntermediate": true
+  },
+  "version": 0.4
+}

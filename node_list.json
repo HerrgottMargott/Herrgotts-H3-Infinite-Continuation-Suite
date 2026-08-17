@@ -1,4 +1,6 @@
 {
+  "H3ContinuousStartV13": "v1.3 flexible Start/Conditioning node with optional First/Last Frames, T2VA/I2VA/L2VA/FL2VA modes, auto-growing Qwen-only image references and picture-map diagnostics.",
+  "H3ContinuousContinueV13": "v1.3 continuation node retaining the proven phase-aligned direct AV-latent handover while adding an optional Last Frame, auto-growing Qwen-only image references and picture-map diagnostics.",
   "H3ContinuousStartV11": "Release Start node for native MiniMax H3 FL2VA First/Last-Frame conditioning.",
   "H3ContinuousContinueV11": "Release continuation node using direct phase-aligned H3 video and audio latent context.",
   "H3ContinuousAnalyzeHandoverV11": "Release Auto Handover analyzer with freeze detection and phase-aligned cutoff metadata.",

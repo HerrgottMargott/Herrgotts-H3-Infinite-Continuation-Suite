@@ -38,6 +38,8 @@ No manual editing was performed at the six clip boundaries. Very small single-fr
 
 ### Main features
 
+- Flexible v1.3 **T2VA / I2VA / L2VA / FL2VA conditioning** with optional First/Last Frames.
+- Auto-growing **Qwen References** with explicit `picture_map` diagnostics and deterministic First/Last priority.
 - Direct **video + audio latent continuation** without decode/re-encode handover.
 - Repeated **Last Frame keyframe anchors** for visual control and quality resets.
 - **Auto Handover** that detects the frozen FL2VA tail instead of using a fixed trim.
@@ -74,7 +76,7 @@ Live validation on **ComfyUI 0.33.0** confirmed repeated Continue generation in 
 
 ### ComfyUI Manager / Registry
 
-Search for **Herrgotts-H3-Infinite-Continuation-Suite** in ComfyUI Manager and install it normally. The v1.2.2 example workflows also embed Registry package metadata so **Check Missing Custom Nodes / Install Missing Custom Nodes** can resolve this pack directly.
+Search for **Herrgotts-H3-Infinite-Continuation-Suite** in ComfyUI Manager and install it normally. The v1.3 example workflows embed Registry package metadata so **Check Missing Custom Nodes / Install Missing Custom Nodes** can resolve this pack directly.
 
 ### Manual installation
 
@@ -103,24 +105,49 @@ The supplied generation workflows include **Patch Sage Attention KJ** as an opti
 
 SageAttention is **not required** for continuation. If it causes instability or OOMs in your setup, disable/bypass it.
 
+## v1.3 flexible conditioning
+
+v1.3 adds two new conditioning nodes without replacing the proven v1.2 workflow classes:
+
+- **H3 Infinite - Flexible Start / Conditioning v1.3** — First Frame and Last Frame are optional, so the same node can start without keyframes, with only First, with only Last, or with both.
+- **H3 Infinite - Continue from Latent v1.3** — keeps the existing direct AV-latent continuation core and adds the new Qwen picture presentation.
+
+Both nodes start with one optional **Qwen Reference 1** image socket. Connecting it automatically reveals **Qwen Reference 2**, then 3, and so on up to nine references. These extra images are shown only to the Qwen text/vision encoder; they are **not** added to `minimax_refs` and are therefore not native Ref2VA/DiT reference latents.
+Use the auto-growing Qwen Reference sockets in their displayed order (1, 2, 3, ...); the workflow is designed around a contiguous sequence.
+
+Picture numbering follows the connected image order used by MiniMax H3:
+
+```text
+First + Last + 2 Qwen References
+Picture 1 = First Frame
+Picture 2 = Last Frame
+Picture 3 = Qwen Reference 1
+Picture 4 = Qwen Reference 2
+```
+
+With only a Last Frame, Last becomes Picture 1. With no First/Last, the first connected Qwen Reference becomes Picture 1. A `picture_map` output and console log show the exact mapping for every run.
+
+The v1.2 Start/Continue class IDs and their legacy `<Picture 1> = reference_image` behavior remain registered unchanged, so existing workflows are not silently reinterpreted.
+
+> **v1.3 validation:** the autogrow UI, First/Last Picture mapping, multiple Qwen References and a longer multi-clip continuation were live-tested successfully in ComfyUI. The continuation/stitching core remains the proven v1.2 path.
 
 ## Usage
 
 ### Included workflows
 
-The `examples/` folder contains four annotated workflows:
+The `examples/` folder contains four annotated v1.3 workflows:
 
-**1. Start — `Herrgotts_H3_Infinite_v1.2_01_Start.json`**  
-Creates Clip 1 with First/Last-Frame conditioning, analyzes the final freeze and saves the complete AV latent plus handover metadata.
+**1. Start — `Herrgotts_H3_Infinite_v1.3_01_Start.json`**  
+Creates Clip 1 with **Flexible Start / Conditioning v1.3**. First and Last Frames are optional, so the same node can run T2VA, I2VA, L2VA or FL2VA. The example keeps First + Last connected because keyframes provide the recommended quality-reset anchors for Infinite Continuation.
 
-**2. Continue — `Herrgotts_H3_Infinite_v1.2_02_Continue.json`**  
-Loads the previous AV latent and creates Clip 2+. Motion and native audio context are injected directly; a new Last Frame can be supplied as the next visual anchor.
+**2. Continue — `Herrgotts_H3_Infinite_v1.3_02_Continue.json`**  
+Loads a manually selected previous AV latent and creates Clip 2+. Motion and native audio context are injected directly; the new Last Frame is optional but recommended as the next visual endpoint / quality reset. Qwen References auto-grow from Reference 1 onward.
 
-**3. 3-Clip Showcase / Auto Stitch — `Herrgotts_H3_Infinite_v1.2_03_3Clip_Showcase_AutoStitch.json`**  
-Runs Start -> Continue -> Continue in one queue and automatically creates a stitched final video. The graph is intentionally structured so another continuation block can be added for Clip 4+.
+**3. 3-Clip Showcase / Auto Stitch — `Herrgotts_H3_Infinite_v1.3_03_3Clip_Showcase_AutoStitch.json`**  
+Runs Flexible Start -> Continue -> Continue in one queue and automatically creates a stitched final video. The graph is intentionally structured so another continuation block can be added for Clip 4+.
 
-**4. Stitch Saved Chain — `Herrgotts_H3_Infinite_v1.2_04_Stitch_Saved_Chain.json`**  
-Combines clips generated separately with Workflows 1/2. It decodes one saved AV latent at a time and writes directly to MP4, so memory usage does not grow with every clip in the chain.
+**4. Stitch Saved Chain — `Herrgotts_H3_Infinite_v1.3_04_Stitch_Saved_Chain.json`**  
+Combines manually numbered clips generated separately with Workflows 1/2. It decodes one saved AV latent at a time and writes directly to MP4, so memory usage does not grow with every clip in the chain.
 
 ### Tested baseline
 
@@ -139,33 +166,42 @@ Most development/testing used:
 
 These are the recommended starting values because they are the settings that have actually been tested.
 
-### Other settings worth testing
+### Flexible keyframe modes and recommended quality resets
 
-H3 itself supports variable duration and optional endpoint inputs, so shorter/longer clips and missing individual keyframes should be possible in principle. They are simply much less tested with this suite.
+The v1.3 Start node supports all four base image-conditioning patterns directly:
+
+- **T2VA:** no First Frame and no Last Frame.
+- **I2VA:** First Frame only.
+- **L2VA:** Last Frame only.
+- **FL2VA:** First Frame + Last Frame.
+
+Continuation can also run without a new Last Frame because the opening temporal context comes from the previous AV latent. However, **keyframes remain the recommended Infinite Continuation workflow**, especially a fresh Last Frame for every new segment. The repeated endpoint anchor is the mechanism that can pull composition, identity and image quality back toward a controlled target instead of letting visual drift accumulate indefinitely.
+
+Other settings worth testing:
 
 - **Shorter clips:** may be useful for faster action or more frequent quality resets.
 - **Longer clips:** likely work within normal H3 limits, but give the model more time to drift before the next keyframe reset.
-- **No Last Frame on an individual continuation:** technically possible, but removes the fixed visual landing/quality reset that motivates this workflow. The No-Lock Fallback becomes more important.
+- **No Last Frame on an individual continuation:** supported, but removes that segment's fixed visual landing / quality reset. The No-Lock Fallback becomes more important.
 - **Different context lengths:** possible, but `22` is the tested default. More context carries more history but also gives the next clip more previous material to reproduce.
 
 If you test other durations, context lengths or keyframe patterns, please share both successful and unsuccessful results.
 
 ## Prompting Guidance
 
-In theory, prompts that work well with normal MiniMax H3 should also work with this suite. A few habits appear helpful for chained FL2VA segments:
+In theory, prompts that work well with normal MiniMax H3 should also work with this suite. A few habits appear helpful for chained segments:
 
+- **Use the v1.3 `picture_map` rather than assuming a fixed Picture number.** First/Last keyframes take the first connected ordinals; Qwen References follow afterward. Example with First + Last + two Qwen References: `Picture 1 = First`, `Picture 2 = Last`, `Picture 3 = Qwen Reference 1`, `Picture 4 = Qwen Reference 2`.
+- **Qwen References can be given separate jobs.** In live testing, multiple references successfully supplied different details (for example subject identity from one image and clothing from another) when the prompt described those roles explicitly. These images are Qwen-only guides, not native Ref2VA/DiT reference latents.
 - **Prompt continuing action rather than the keyframe landing.** For smooth boundaries, avoid strongly steering the wording toward the exact Last Frame pose. Prefer wording like `she continues walking` over `she settles into the pose`. The image keyframe already provides the endpoint anchor.
 - **Keep important audio away from the very end of a segment.** If your prompt describes events chronologically, place critical dialogue/sound earlier rather than making it the final event. The workflow may discard or replace a few rendered frames around the handover, so important audio is safer near the beginning or middle of the clip.
 - **Background music can be discouraged** by adding `non_diegetic_music: N/A` at the end of the prompt. This does not guarantee silence, but in testing it can substantially reduce unwanted music.
-- **`<Picture 1>` is still experimental.** Its exact influence on the generated video is not fully understood. Identity appears more stable when the reference clearly belongs to the same subject/content as the keyframes. A useful prompt opening is for example:  
-  `<Picture 1> is reference for the woman's facial features, clothing and bodily composition.`
 
 ## Included Nodes
 
 | Node | Purpose | Main settings |
 |---|---|---|
-| **H3 Infinite - Start FFLF v1.2** | Creates Clip 1 with native H3 First/Last-Frame conditioning. | Duration, resolution, First Frame, Last Frame, optional `<Picture 1>`. |
-| **H3 Infinite - Continue from Latent v1.2** | Creates Clip 2+ from direct previous AV latent context. | Recommended: `auto`, `phase_aligned_extended`, `context_frames = 22`. |
+| **H3 Infinite - Flexible Start / Conditioning v1.3** | Creates Clip 1 in T2VA, I2VA, L2VA or FL2VA mode from optional First/Last Frames. | Duration, resolution, optional First/Last, auto-growing Qwen References, `picture_map`. |
+| **H3 Infinite - Continue from Latent v1.3** | Creates Clip 2+ from direct previous AV latent context with optional new Last Frame and Qwen References. | Recommended core: `auto`, `phase_aligned_extended`, `context_frames = 22`; Last Frame recommended for quality reset. |
 | **H3 Infinite - Auto Handover v1.2** | Detects the frozen FL2VA tail and selects the usable handover. | `Balanced` = tested default; `Motion Safe` = more conservative; `Custom` exposes detector settings. |
 | **H3 Infinite - Output / Stitch v1.2** | Prepares one rendered segment. | `Full`, `Stitch Ready`, `Final Clip`. |
 | **H3 Infinite - Seamless AV Join v1.2** | Joins the current timeline to the next full decoded clip. | Safe Tail Bridge `2`, video crossfade `4`, audio `15 ms`. Luminance matching is experimental and off by default. |
@@ -173,6 +209,8 @@ In theory, prompts that work well with normal MiniMax H3 should also work with t
 | **H3 Infinite - Load AV Latent** | Loads a saved full AV latent for later continuation. | Select prefix/index. |
 | **H3 Infinite - Stitch Saved Chain v1.2** | Memory-bounded final assembly of separately generated clips. | Clip range, Safe Tail Bridge, video/audio seam settings, CRF. |
 | **H3 Infinite - Latent Info** | Shows basic information about a saved/current AV latent. | Mainly useful for troubleshooting. |
+
+The handover, output/stitch and saved-chain class IDs keep their v1.2 names because their proven runtime behavior is intentionally unchanged in v1.3; only the new Start/Continue conditioning layer received new v1.3 class IDs.
 
 ### Safe Tail Bridge
 
@@ -193,7 +231,7 @@ Bug reports are equally useful. Please include the relevant console log and, whe
 - **Audio quality may drift over very long chains.** Visual quality can repeatedly reset toward new keyframes; there is currently no equivalent HQ audio reset.
 - **Dialogue can extend into the frozen visual tail.** The voice itself may continue correctly while words that occur in discarded tail audio are not recreated. Keep important dialogue away from segment endings.
 - **Audio context is limited.** Audio before the selected context window is not available to the next clip.
-- **The extra `<Picture 1>` reference remains experimental.** It appears more stable when it clearly depicts the same subject/content as the keyframes.
+- **Qwen References are a hybrid extension, not native Ref2VA references.** Multi-reference role separation worked well in live testing, but broad scene/model coverage is still limited.
 - **Keyframe-free continuation is not well tested.** It removes the main visual reset/anchor that motivated this approach.
 - **Durations other than the tested 10-second setup need more testing.**
 - **Performance variability in long chained runs:** During testing, one three-clip run showed strongly increasing generation times across successive clips (23:55 -> 39:43 -> 55:52). A later run did not reproduce this behavior (24:53 -> 27:50 -> 27:42). The cause is currently unknown and may depend on ComfyUI memory management, offloading, system state or other runtime factors rather than chain length itself. More testing is welcome.
@@ -244,7 +282,7 @@ OpenAI is not a maintainer, sponsor or publisher of this project.
 - Boundary luminance matching remains available only as an **experimental fallback** and is off by default in the release workflows.
 - `Stitch Saved Chain` decodes one full saved AV latent at a time and encodes H.264/AAC through PyAV, avoiding a giant all-clips IMAGE/AUDIO batch.
 - If no freeze is found, Auto Handover excludes `freeze_hold - 1` final frames before selecting a valid phase-aligned cutoff.
-- `<Picture 1>` is Qwen-only in the supplied conditioning nodes; it is not inserted as a persistent DiT reference latent.
+- v1.3 **Qwen References** are Qwen-only image inputs. They are appended after connected First/Last Pictures and are not inserted as persistent DiT / native Ref2VA reference latents.
 - The H3 runtime wrappers are installed lazily on the first continuation use and return stock behavior for graphs without this suite's markers.
 
 ## Testing

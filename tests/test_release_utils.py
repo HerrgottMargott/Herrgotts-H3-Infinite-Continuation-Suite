@@ -56,12 +56,7 @@ def test_motion_safe_changes_only_prelock_margin():
 
 
 def test_stitch_ready_start_clip_trims_phase_aligned_tail():
-    handover = {
-        "available": True,
-        "frame_count": 243,
-        "handover_end_frame": 212,
-        "landing_tail_frames": 30,
-    }
+    handover = {"available": True, "frame_count": 243, "handover_end_frame": 212, "landing_tail_frames": 30}
     plan = stitch_trim_plan(243, "Stitch Ready", 0, handover)
     assert plan["head_trim_frames"] == 0
     assert plan["tail_trim_frames"] == 30
@@ -69,12 +64,7 @@ def test_stitch_ready_start_clip_trims_phase_aligned_tail():
 
 
 def test_stitch_ready_continuation_trims_dynamic_head_and_tail():
-    handover = {
-        "available": True,
-        "frame_count": 243,
-        "handover_end_frame": 225,
-        "landing_tail_frames": 17,
-    }
+    handover = {"available": True, "frame_count": 243, "handover_end_frame": 225, "landing_tail_frames": 17}
     plan = stitch_trim_plan(243, "Stitch Ready", 26, handover)
     assert plan["head_trim_frames"] == 26
     assert plan["tail_trim_frames"] == 17
@@ -83,38 +73,18 @@ def test_stitch_ready_continuation_trims_dynamic_head_and_tail():
 
 def test_full_mode_is_true_bypass_without_metadata():
     plan = stitch_trim_plan(243, "Full", 999, None)
-    assert plan == {
-        "mode": "full",
-        "head_trim_frames": 0,
-        "tail_trim_frames": 0,
-        "kept_frames": 243,
-    }
+    assert plan == {"mode": "full", "head_trim_frames": 0, "tail_trim_frames": 0, "kept_frames": 243}
 
 
 def test_v117_final_clip_trims_dynamic_head_but_preserves_complete_tail():
-    handover = {
-        "available": True,
-        "frame_count": 243,
-        "handover_end_frame": 221,
-        "landing_tail_frames": 21,
-    }
+    handover = {"available": True, "frame_count": 243, "handover_end_frame": 221, "landing_tail_frames": 21}
     plan = stitch_trim_plan(243, "Final Clip", 22, handover)
-    assert plan == {
-        "mode": "final_clip",
-        "head_trim_frames": 22,
-        "tail_trim_frames": 0,
-        "kept_frames": 221,
-    }
+    assert plan == {"mode": "final_clip", "head_trim_frames": 22, "tail_trim_frames": 0, "kept_frames": 221}
 
 
 def test_v117_final_clip_does_not_require_handover_metadata():
     plan = stitch_trim_plan(243, "Final Clip", 35, None)
-    assert plan == {
-        "mode": "final_clip",
-        "head_trim_frames": 35,
-        "tail_trim_frames": 0,
-        "kept_frames": 208,
-    }
+    assert plan == {"mode": "final_clip", "head_trim_frames": 35, "tail_trim_frames": 0, "kept_frames": 208}
 
 
 def test_v11_motion_safe_uses_eight_frame_hold():
@@ -132,7 +102,6 @@ def test_v11_no_lock_fallback_excludes_hold_minus_one_then_phase_aligns():
     assert result["no_lock_fallback_applied"] is True
     assert result["no_lock_fallback_requested_excluded_frames"] == 7
     assert result["no_lock_fallback_target_end_frame"] == 235
-    # Phase alignment moves the usable latent boundary two more frames back.
     assert result["handover_end_frame"] == 233
     assert result["landing_tail_frames"] == 9
     assert result["phase_aligned_context_frames"] == 30
