@@ -60,17 +60,6 @@ This suite specifically focuses on **freeze-aware, keyframe-anchored FL2VA chain
 
 For a general Ref2VA graph another chaining pack may be a better fit. Herrgotts-H3-Infinite-Continuation-Suite is aimed at users who specifically want **latent continuity + repeated FL2VA keyframe control + automatic freeze-safe stitching**.
 
-## ComfyUI 0.33 compatibility
-
-**v1.2.2** adapts the continuation path to ComfyUI's new native MiniMax H3 arbitrary-keyframe API.
-
-- On **ComfyUI 0.33+**, continuation keyframes use stock ComfyUI placement directly and the old `MiniMaxH3.extra_conds` payload monkey patch is not installed. A small marker-gated `PackedLayout` wrapper remains only to put the direct carried audio latent on the new clip's own timeline so it ends at the same continuation boundary as the video context.
-- On **older ComfyUI H3 implementations**, the previous lazy legacy keyframe/payload compatibility path is retained.
-- Runtime detection is based on the live `PackedLayout.__init__` API rather than a hard-coded ComfyUI version. Both paths fail closed if the live layout no longer matches the assumptions validated by the built-in self-test.
-
-The direct video/audio latent handover, freeze analysis, phase-aligned cutoff, Safe Tail Bridge and stitching logic are unchanged.
-
-Live validation on **ComfyUI 0.33.0** confirmed repeated Continue generation in the same ComfyUI session, including direct AV continuation, saving, seamless visual/audio continuation and correct Last Frame landing.
 
 ## Installation
 
@@ -130,6 +119,18 @@ With only a Last Frame, Last becomes Picture 1. With no First/Last, the first co
 The v1.2 Start/Continue class IDs and their legacy `<Picture 1> = reference_image` behavior remain registered unchanged, so existing workflows are not silently reinterpreted.
 
 > **v1.3 validation:** the autogrow UI, First/Last Picture mapping, multiple Qwen References and a longer multi-clip continuation were live-tested successfully in ComfyUI. The continuation/stitching core remains the proven v1.2 path.
+
+## ComfyUI 0.33 compatibility
+
+**v1.2.2** adapts the continuation path to ComfyUI's new native MiniMax H3 arbitrary-keyframe API.
+
+- On **ComfyUI 0.33+**, continuation keyframes use stock ComfyUI placement directly and the old `MiniMaxH3.extra_conds` payload monkey patch is not installed. A small marker-gated `PackedLayout` wrapper remains only to put the direct carried audio latent on the new clip's own timeline so it ends at the same continuation boundary as the video context.
+- On **older ComfyUI H3 implementations**, the previous lazy legacy keyframe/payload compatibility path is retained.
+- Runtime detection is based on the live `PackedLayout.__init__` API rather than a hard-coded ComfyUI version. Both paths fail closed if the live layout no longer matches the assumptions validated by the built-in self-test.
+
+The direct video/audio latent handover, freeze analysis, phase-aligned cutoff, Safe Tail Bridge and stitching logic are unchanged.
+
+Live validation on **ComfyUI 0.33.0** confirmed repeated Continue generation in the same ComfyUI session, including direct AV continuation, saving, seamless visual/audio continuation and correct Last Frame landing.
 
 ## Usage
 
