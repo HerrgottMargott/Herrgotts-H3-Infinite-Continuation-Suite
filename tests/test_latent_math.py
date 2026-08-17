@@ -33,9 +33,6 @@ def test_legacy_default_pre_freeze_slice():
 
 def test_phase_aware_cutoff_keeps_late_motion():
     _, vt, at = temporal_shape(243)
-    # v0.3 would round ideal frame 218 all the way back to frame 208.
-    # v0.4 keeps the latest actual source latent boundary: exclusive 217,
-    # therefore inclusive frame 216 (only 2 frames before the ideal cutoff).
     s = phase_aware_context_slice(vt, 22, ideal_last_frame=218)
     assert s["source_end_frame"] == 217
     assert s["source_end_frame"] - 1 == 216

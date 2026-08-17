@@ -535,11 +535,11 @@ def install_layout_patch(mode=None):
     _APPLIED_MODE = mode
     if mode == NATIVE_LAYOUT_MODE:
         _LOG.info(
-            "h3_continuous v1.2.2: ComfyUI native H3 keyframes detected; installed audio-only timeline wrapper"
+            "h3_continuous v1.3.0: ComfyUI native H3 keyframes detected; installed audio-only timeline wrapper"
         )
     else:
         _LOG.info(
-            "h3_continuous v1.2.2: legacy marker-gated H3 layout wrapper installed on first continuation use"
+            "h3_continuous v1.3.0: legacy marker-gated H3 layout wrapper installed on first continuation use"
         )
     return True
 

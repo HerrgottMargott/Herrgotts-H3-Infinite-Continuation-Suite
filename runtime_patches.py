@@ -76,7 +76,7 @@ def ensure_h3_runtime_patches():
                 )
             _RUNTIME_MODE = mode
             _LOG.info(
-                "h3_continuous v1.2.2: native ComfyUI H3 keyframe/ref path active; payload monkey patch not required"
+                "h3_continuous v1.3.0: native ComfyUI H3 keyframe/ref path active; payload monkey patch not required"
             )
             return mode
 
@@ -110,6 +110,6 @@ def ensure_h3_runtime_patches():
 
         _RUNTIME_MODE = mode
         _LOG.info(
-            "h3_continuous v1.2.2: legacy H3 runtime hooks ready; unrelated H3 graphs remain on stock behavior"
+            "h3_continuous v1.3.0: legacy H3 runtime hooks ready; unrelated H3 graphs remain on stock behavior"
         )
         return mode

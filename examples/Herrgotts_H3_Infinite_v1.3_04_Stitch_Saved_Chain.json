@@ -23,9 +23,9 @@
       "properties": {
         "Node name for S&R": "MarkdownNote"
       },
-      "title": "START HERE — Stitch Individually Generated Clips",
+      "title": "START HERE — Stitch Individually Generated Clips v1.3",
       "widgets_values": [
-        "# Herrgotts H3 Infinite — Stitch Saved Chain\n\nUse this workflow after generating clips separately with the **Start** and **Continue** workflows. It reads the saved **full AV latents** (`clip_00001.safetensors`, `clip_00002.safetensors`, …), reconstructs the freeze-safe boundaries and writes one final MP4.\n\n### Normal use\n1. Load the same **Video VAE** and **Audio VAE** used for generation.\n2. Keep `latent_prefix = h3_continuous/clip` if you used the example Save nodes.\n3. `first_clip = 1`. Leave `last_clip = 0` to use the highest numbered saved clip automatically, or set an explicit final clip.\n4. Recommended seam defaults: **Safe Tail Bridge max 2 frames**, **4 video crossfade frames**, **15 ms audio crossfade**, **luminance match OFF**.\n5. Queue this workflow. No H3 diffusion model or text encoder is needed.\n\nThe final selected clip automatically keeps its complete ending; all earlier clips use their saved freeze-safe handover metadata."
+        "# Herrgotts H3 Infinite v1.3 — Stitch Saved Chain\n\nUse this workflow after generating clips separately with the **v1.3 Start** and **v1.3 Continue** workflows. It reads the manually numbered **full AV latents** (`clip_00001.safetensors`, `clip_00002.safetensors`, ...), reconstructs the freeze-safe boundaries and writes one final MP4.\n\n### Normal use\n1. Load the same **Video VAE** and **Audio VAE** used for generation.\n2. Keep `latent_prefix = h3_continuous/clip` if you used the example Save nodes.\n3. `first_clip = 1`. Leave `last_clip = 0` to stitch through the highest numbered saved clip, or set an explicit final clip.\n4. Recommended seam defaults remain unchanged: **Safe Tail Bridge max 2 frames**, **4 video crossfade frames**, **15 ms audio crossfade**, **luminance match OFF**.\n5. Queue this workflow. No H3 diffusion model or text encoder is needed.\n\nv1.3 deliberately keeps the proven **manual Save / Load clip indexing** used by earlier releases. First/Last keyframe flexibility and Qwen References affect conditioning during generation; the stable stitching format remains unchanged.\n"
       ]
     },
     {
@@ -137,7 +137,7 @@
       "properties": {
         "Node name for S&R": "H3ContinuousStitchSavedChainV11",
         "cnr_id": "herrgotts-h3-infinite-continuation-suite",
-        "ver": "1.2.2"
+        "ver": "1.3.0"
       },
       "widgets_values": [
         "h3_continuous/clip",
@@ -199,9 +199,9 @@
       "properties": {
         "Node name for S&R": "MarkdownNote"
       },
-      "title": "INFO — Saved metadata",
+      "title": "INFO — Saved metadata / manual indexing",
       "widgets_values": [
-        "### Self-describing saved clips\nSaved clips store each clip's **actual reused head-context length** together with its full AV latent and Auto Handover metadata. This lets the stitcher reconstruct the correct boundaries without the original generation graph.\n\nOlder v1.1.x saved clips can often still work because the stitcher can recover the next head length from the previous clip's phase-aligned handover metadata. If that information is missing, it stops instead of guessing.\n\nFor best results, keep all clips in one numbered prefix and use the same resolution + Video/Audio VAEs throughout the chain.\n"
+        "### Self-describing saved clips\nSaved clips store each clip's **actual reused head-context length** together with its full AV latent and Auto Handover metadata. This lets the stitcher reconstruct the correct boundaries without the original generation graph.\n\nGeneration Save / Load indices remain intentionally **manual** in v1.3: keep a predictable sequence such as `clip_00001`, `clip_00002`, ... and choose the exact index when continuing or overwriting a branch.\n\nOlder saved clips can often still work because the stitcher can recover the next head length from the previous clip's phase-aligned handover metadata. If required information is missing, it stops instead of guessing.\n\nFor best results, use the same resolution + Video/Audio VAEs throughout the chain.\n"
       ],
       "color": "#3f3f3f",
       "bgcolor": "#575757"

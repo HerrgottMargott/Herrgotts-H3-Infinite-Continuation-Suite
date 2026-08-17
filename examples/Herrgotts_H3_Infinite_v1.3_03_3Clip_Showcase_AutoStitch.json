@@ -1,5 +1,5 @@
 {
-  "id": "herrgotts-h3-infinite-3clip-showcase-v1.2",
+  "id": "herrgotts-h3-infinite-3clip-showcase-v1.3",
   "revision": 0,
   "last_node_id": 61,
   "last_link_id": 104,
@@ -20,10 +20,10 @@
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "title": "START HERE — 3-Clip Infinite Continuation Showcase",
+      "title": "START HERE — 3-Clip Infinite Continuation Showcase v1.3",
       "properties": {},
       "widgets_values": [
-        "# Herrgotts H3 Infinite — 3-Clip Showcase\n\nThis workflow demonstrates the **complete approach in one queue**: native FFLF start, two direct AV-latent continuations, freeze-safe handover analysis, and **context-aligned seamless AV joining**.\n\n### Before you queue\n1. Select the H3 model / Qwen encoder / Video VAE / Audio VAE.\n2. Load First Frame + one Last Frame per clip and optionally one shared `<Picture 1>` reference.\n3. Enter a separate prompt for each clip.\n4. Keep resolution and core sampling settings consistent.\n5. Queue once. The final joins use a **4-frame video context crossfade + 15 ms audio de-click crossfade** by default.\n\n### Extend to Clip 4+\nChange Clip 3's role from final to intermediate, duplicate its continuation block for Clip 4, and add one more **Seamless AV Join**. Set only the current last join to `Final Clip`.\n"
+        "# Herrgotts H3 Infinite v1.3 — 3-Clip Showcase\n\nThis workflow demonstrates the **complete approach in one queue**: flexible H3 Start conditioning, two direct AV-latent continuations, freeze-safe handover analysis, and the proven context-aligned AV stitching path.\n\n### Before you queue\n1. Select the H3 model / Qwen encoder / Video VAE / Audio VAE.\n2. Load the example First Frame + one Last Frame per clip and optionally a shared **Qwen Reference 1**.\n3. Enter a separate prompt for each clip.\n4. Keep resolution and core sampling settings consistent.\n5. Queue once. The final joins use the stable **Safe Tail Bridge max 2 + 4-frame video crossfade + 15 ms audio de-click crossfade** defaults.\n\n### Flexible keyframe modes\nThe v1.3 Start node supports **T2VA, I2VA, L2VA and FL2VA** because First/Last Frames are optional. Continuation Last Frames are optional as well.\n\nFor the Infinite Continuation use case shown here, keyframes remain **recommended**: a fresh Last Frame on each segment gives H3 a repeated endpoint / **quality reset** and helps limit visual drift over a long chain.\n\n### Extend to Clip 4+\nChange Clip 3's role from final to intermediate, duplicate its continuation block for Clip 4, and add one more **Seamless AV Join**. Set only the current last join to `Final Clip`.\n"
       ],
       "color": "#1f4d3b",
       "bgcolor": "#2c6b52"
@@ -396,7 +396,7 @@
           "links": null
         }
       ],
-      "title": "Shared Reference Image (<Picture 1>)",
+      "title": "Shared Qwen Reference 1",
       "properties": {
         "cnr_id": "comfy-core",
         "ver": "0.30.0",
@@ -423,10 +423,10 @@
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "title": "INFO — Shared Qwen reference",
+      "title": "INFO — Shared Qwen Reference",
       "properties": {},
       "widgets_values": [
-        "### `<Picture 1>` reference\nOptional identity/style reference used by Qwen conditioning for **all three clips** in this example.\n\nIt is not the temporal continuation source. Motion and audio continuity come directly from the previous H3 AV latent.\n"
+        "### Shared Qwen Reference 1\nOptional Qwen-only identity/style/content guidance used by all three clips in this example. Connecting Qwen Reference 1 on a v1.3 conditioning node reveals Qwen Reference 2, then 3, and so on up to nine.\n\nIt is **not** the temporal continuation source and is not a native Ref2VA/DiT reference latent. Motion and audio continuity come directly from the previous H3 AV latent.\n\nBecause Picture numbering depends on each clip's connected keyframes:\n- Clip 1 here: `Picture 1 = First`, `Picture 2 = Last`, `Picture 3 = Qwen Reference 1`\n- Clip 2/3 here: `Picture 1 = Last`, `Picture 2 = Qwen Reference 1`\n\nCheck each v1.3 node's `picture_map` output / console log when writing prompts.\n"
       ],
       "color": "#3f3f3f",
       "bgcolor": "#575757"
@@ -513,7 +513,7 @@
     },
     {
       "id": 15,
-      "type": "H3ContinuousStartV11",
+      "type": "H3ContinuousStartV13",
       "pos": [
         -1240,
         870
@@ -549,7 +549,7 @@
           "link": 7
         },
         {
-          "name": "reference_image",
+          "name": "qwen_reference_1",
           "shape": 7,
           "type": "IMAGE",
           "link": 8
@@ -569,13 +569,18 @@
           "links": [
             15
           ]
+        },
+        {
+          "name": "picture_map",
+          "type": "STRING",
+          "links": null
         }
       ],
-      "title": "CLIP 1 — Native FFLF Start",
+      "title": "CLIP 1 — Flexible Start / Conditioning v1.3",
       "properties": {
-        "Node name for S&R": "H3ContinuousStartV11",
+        "Node name for S&R": "H3ContinuousStartV13",
         "cnr_id": "herrgotts-h3-infinite-continuation-suite",
-        "ver": "1.2.2"
+        "ver": "1.3.0"
       },
       "widgets_values": [
         "Prompt — Clip 1",
@@ -885,11 +890,11 @@
           "links": null
         }
       ],
-      "title": "CLIP 1 — Auto Handover (Balanced)",
+      "title": "CLIP 1 — Auto Handover — Balanced",
       "properties": {
         "Node name for S&R": "H3ContinuousAnalyzeHandoverV11",
         "cnr_id": "herrgotts-h3-infinite-continuation-suite",
-        "ver": "1.2.2"
+        "ver": "1.3.0"
       },
       "widgets_values": [
         "Balanced",
@@ -961,7 +966,7 @@
       "properties": {
         "Node name for S&R": "H3ContinuousSaveLatent",
         "cnr_id": "herrgotts-h3-infinite-continuation-suite",
-        "ver": "1.2.2"
+        "ver": "1.3.0"
       },
       "widgets_values": [
         "h3_continuous/clip",
@@ -1042,7 +1047,7 @@
       "properties": {
         "Node name for S&R": "H3ContinuousStitchOutputV11",
         "cnr_id": "herrgotts-h3-infinite-continuation-suite",
-        "ver": "1.2.2"
+        "ver": "1.3.0"
       },
       "widgets_values": [
         "Stitch Ready"
@@ -1064,10 +1069,10 @@
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "title": "INFO — Clip 1 inputs",
+      "title": "INFO — Clip 1 inputs / optional modes",
       "properties": {},
       "widgets_values": [
-        "### Clip 1\n**First Frame** + **Last Frame Clip 1** define the native FFLF boundaries. Enter Clip 1's action/dialogue in the Start node.\n\n`Duration = 10 s` is only an example. The actual H3 frame count snaps to the model's valid temporal grid.\n"
+        "### Clip 1\nThis example connects **First Frame + Last Frame**, so Clip 1 runs in FL2VA mode. The v1.3 Start node does not require both:\n- neither = T2VA\n- First only = I2VA\n- Last only = L2VA\n- First + Last = FL2VA\n\nFor a long continuation chain, the shown keyframe setup is recommended because endpoint keyframes repeatedly pull composition / identity / quality back toward a controlled target.\n\n`Duration = 10 s` is only an example. The actual H3 frame count snaps to the model's valid temporal grid.\n"
       ],
       "color": "#3f3f3f",
       "bgcolor": "#575757"
@@ -1088,10 +1093,10 @@
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "title": "INFO — Clip 1 Start node",
+      "title": "INFO — Clip 1 Flexible Start",
       "properties": {},
       "widgets_values": [
-        "### Start FFLF\nThis is the only clip that needs a **First Frame** input. The sampler output is both decoded for rendering/analysis and passed directly into Clip 2 as the previous AV latent.\n\nNo rendered frames are used as the continuation context.\n"
+        "### Flexible Start / Conditioning v1.3\nClip 1 uses the v1.3 flexible Start node. Its connected First/Last Frames are native temporal keyframes **and** receive the first Qwen Picture ordinals. Extra Qwen References follow afterward.\n\nThe sampler output is both decoded for rendering/analysis and passed directly into Clip 2 as the previous AV latent. No rendered frames are used as continuation context.\n\nFirst/Last are optional technically, but keeping keyframe anchors is the recommended Infinite Continuation path because they provide the repeated **quality reset** this suite is designed around.\n"
       ],
       "color": "#3f3f3f",
       "bgcolor": "#575757"
@@ -1186,7 +1191,7 @@
     },
     {
       "id": 29,
-      "type": "H3ContinuousContinueV11",
+      "type": "H3ContinuousContinueV13",
       "pos": [
         -1570,
         2210
@@ -1227,7 +1232,7 @@
           "link": 30
         },
         {
-          "name": "reference_image",
+          "name": "qwen_reference_1",
           "shape": 7,
           "type": "IMAGE",
           "link": 31
@@ -1266,13 +1271,18 @@
           "name": "handover_info",
           "type": "STRING",
           "links": null
+        },
+        {
+          "name": "picture_map",
+          "type": "STRING",
+          "links": null
         }
       ],
-      "title": "CLIP 2 — Continue from Clip 1",
+      "title": "CLIP 2 — Continue v1.3 from Clip 1",
       "properties": {
-        "Node name for S&R": "H3ContinuousContinueV11",
+        "Node name for S&R": "H3ContinuousContinueV13",
         "cnr_id": "herrgotts-h3-infinite-continuation-suite",
-        "ver": "1.2.2"
+        "ver": "1.3.0"
       },
       "widgets_values": [
         "Prompt — Clip 2",
@@ -1589,11 +1599,11 @@
           "links": null
         }
       ],
-      "title": "CLIP 2 — Auto Handover (Balanced)",
+      "title": "CLIP 2 — Auto Handover — Balanced",
       "properties": {
         "Node name for S&R": "H3ContinuousAnalyzeHandoverV11",
         "cnr_id": "herrgotts-h3-infinite-continuation-suite",
-        "ver": "1.2.2"
+        "ver": "1.3.0"
       },
       "widgets_values": [
         "Balanced",
@@ -1665,7 +1675,7 @@
       "properties": {
         "Node name for S&R": "H3ContinuousSaveLatent",
         "cnr_id": "herrgotts-h3-infinite-continuation-suite",
-        "ver": "1.2.2"
+        "ver": "1.3.0"
       },
       "widgets_values": [
         "h3_continuous/clip",
@@ -1742,7 +1752,7 @@
       "properties": {
         "Node name for S&R": "H3ContinuousStitchOutputV11",
         "cnr_id": "herrgotts-h3-infinite-continuation-suite",
-        "ver": "1.2.2"
+        "ver": "1.3.0"
       },
       "widgets_values": [
         "Stitch Ready"
@@ -1764,10 +1774,10 @@
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "title": "INFO — Clip 2 target",
+      "title": "INFO — Clip 2 optional Last Frame",
       "properties": {},
       "widgets_values": [
-        "### Clip 2 Last Frame\nLoad the visual endpoint you want Clip 2 to reach. The previous clip is **not** supplied as an image — its motion/audio history arrives through the direct AV latent connection.\n"
+        "### Clip 2 endpoint\nThe connected **Last Frame** is the visual endpoint / quality-reset keyframe for Clip 2. In v1.3 this input is optional; disconnect it if you intentionally want continuation without a new endpoint anchor.\n\nThe previous clip is **not** supplied as an image. Its motion/audio history arrives through the direct AV latent connection.\n\nFor long chains, keeping a new Last Frame per continuation is still the recommended setup because it gives each segment a fresh visual target.\n"
       ],
       "color": "#3f3f3f",
       "bgcolor": "#575757"
@@ -1788,10 +1798,10 @@
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "title": "INFO — Clip 2 continuation",
+      "title": "INFO — Clip 2 Continue v1.3",
       "properties": {},
       "widgets_values": [
-        "### Continue from Clip 1\nRecommended settings are already selected:\n- `context_frames = 22`\n- `handover_mode = auto`\n- `alignment_mode = phase_aligned_extended`\n\nThe Continue node may extend the actual head context backward to a canonical H3 phase. Its `actual_head_context_frames` output therefore drives the Stitch Ready **head trim** exactly.\n\n\n**Prompting tip:** describe the action as continuing through the segment (for example `she continues walking`) rather than strongly instructing the model to settle into the Last Frame. Keep important dialogue away from the very end of a segment, where trimming may occur.\n\nIf unwanted background music is a problem, try appending `non_diegetic_music: N/A`. When using `<Picture 1>` for identity, explicitly describe it as the reference for the subject's facial features, clothing and body composition."
+        "### Continue from Clip 1\nRecommended settings are already selected:\n- `context_frames = 22`\n- `handover_mode = auto`\n- `alignment_mode = phase_aligned_extended`\n\nThe Continue node may extend the actual head context backward to a canonical H3 phase. Its `actual_head_context_frames` output therefore drives the Stitch Ready **head trim** exactly.\n\nWith this graph's Last Frame + shared Qwen Reference, the Qwen mapping is `Picture 1 = Last Frame`, `Picture 2 = Qwen Reference 1`. The direct latent handover is not a Picture.\n\n**Prompting tip:** describe the action as continuing through the segment rather than strongly instructing the model to settle into the Last Frame. Keep important dialogue away from the very end of a segment, where trimming may occur. If unwanted background music is a problem, try appending `non_diegetic_music: N/A`.\n"
       ],
       "color": "#3f3f3f",
       "bgcolor": "#575757"
@@ -1862,7 +1872,7 @@
     },
     {
       "id": 42,
-      "type": "H3ContinuousContinueV11",
+      "type": "H3ContinuousContinueV13",
       "pos": [
         -1570,
         3560
@@ -1903,7 +1913,7 @@
           "link": 54
         },
         {
-          "name": "reference_image",
+          "name": "qwen_reference_1",
           "shape": 7,
           "type": "IMAGE",
           "link": 55
@@ -1942,13 +1952,18 @@
           "name": "handover_info",
           "type": "STRING",
           "links": null
+        },
+        {
+          "name": "picture_map",
+          "type": "STRING",
+          "links": null
         }
       ],
-      "title": "CLIP 3 — Continue from Clip 2",
+      "title": "CLIP 3 — Continue v1.3 from Clip 2",
       "properties": {
-        "Node name for S&R": "H3ContinuousContinueV11",
+        "Node name for S&R": "H3ContinuousContinueV13",
         "cnr_id": "herrgotts-h3-infinite-continuation-suite",
-        "ver": "1.2.2"
+        "ver": "1.3.0"
       },
       "widgets_values": [
         "Prompt — Clip 3",
@@ -2261,11 +2276,11 @@
           "links": null
         }
       ],
-      "title": "CLIP 3 — Auto Handover (Balanced)",
+      "title": "CLIP 3 — Auto Handover — Balanced",
       "properties": {
         "Node name for S&R": "H3ContinuousAnalyzeHandoverV11",
         "cnr_id": "herrgotts-h3-infinite-continuation-suite",
-        "ver": "1.2.2"
+        "ver": "1.3.0"
       },
       "widgets_values": [
         "Balanced",
@@ -2337,7 +2352,7 @@
       "properties": {
         "Node name for S&R": "H3ContinuousSaveLatent",
         "cnr_id": "herrgotts-h3-infinite-continuation-suite",
-        "ver": "1.2.2"
+        "ver": "1.3.0"
       },
       "widgets_values": [
         "h3_continuous/clip",
@@ -2414,7 +2429,7 @@
       "properties": {
         "Node name for S&R": "H3ContinuousStitchOutputV11",
         "cnr_id": "herrgotts-h3-infinite-continuation-suite",
-        "ver": "1.2.2"
+        "ver": "1.3.0"
       },
       "widgets_values": [
         "Final Clip"
@@ -2436,10 +2451,10 @@
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "title": "INFO — Clip 3 target",
+      "title": "INFO — Clip 3 optional Last Frame",
       "properties": {},
       "widgets_values": [
-        "### Clip 3 Last Frame\nThis is the third endpoint. Change the prompt and endpoint independently while preserving the same character/environment constraints you want carried through the sequence.\n"
+        "### Clip 3 endpoint\nThis example uses another **Last Frame** as the third visual endpoint / quality reset. It is optional in v1.3, but recommended when your goal is to periodically reset composition, identity and image quality through a long chain.\n\nChange the prompt and endpoint independently while preserving the character/environment constraints you want carried through the sequence.\n"
       ],
       "color": "#3f3f3f",
       "bgcolor": "#575757"
@@ -2463,7 +2478,7 @@
       "title": "INFO — Clip 3 / Final Clip / easy extension",
       "properties": {},
       "widgets_values": [
-        "### Continue from Clip 2\nThis block is the template for every additional clip.\n\nThe standalone `Final Clip` node is optional. In the automatic chain, the final **Seamless AV Join** receives Clip 3's FULL decoded render and is set to `Final Clip`, so the reused head is removed while the complete final-keyframe landing is preserved.\n\nTo add Clip 4, duplicate this continuation block and add one more Seamless AV Join after the current combined output. Connect Clip 3's full decoded video + handover as the new join's **previous bridge source**."
+        "### Continue from Clip 2\nThis v1.3 continuation block is the template for every additional clip. Last Frame is optional and Qwen References can grow from Reference 1 to Reference 9 as needed.\n\nThe standalone `Final Clip` node is optional. In the automatic chain, the final **Seamless AV Join** receives Clip 3's FULL decoded render and is set to `Final Clip`, so the reused head is removed while the complete endpoint landing is preserved.\n\nTo add Clip 4, duplicate this continuation block and add one more Seamless AV Join after the current combined output. Connect Clip 3's full decoded video + handover as the new join's **previous bridge source**.\n"
       ],
       "color": "#3f3f3f",
       "bgcolor": "#575757"
@@ -2713,7 +2728,7 @@
       "properties": {
         "Node name for S&R": "H3ContinuousSeamlessJoinV11",
         "cnr_id": "herrgotts-h3-infinite-continuation-suite",
-        "ver": "1.2.2"
+        "ver": "1.3.0"
       },
       "widgets_values": [
         "Stitch Ready",
@@ -2812,7 +2827,7 @@
       "properties": {
         "Node name for S&R": "H3ContinuousSeamlessJoinV11",
         "cnr_id": "herrgotts-h3-infinite-continuation-suite",
-        "ver": "1.2.2"
+        "ver": "1.3.0"
       },
       "widgets_values": [
         "Final Clip",

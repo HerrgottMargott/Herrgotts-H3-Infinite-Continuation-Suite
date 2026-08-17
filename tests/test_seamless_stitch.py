@@ -11,10 +11,8 @@ def test_context_aligned_video_join_keeps_hard_stitch_duration():
     prev = torch.zeros((10, 2, 2, 3), dtype=torch.float32)
     nxt = torch.ones((8, 2, 2, 3), dtype=torch.float32)
     out, stats = context_aligned_video_join(prev, nxt, next_head_context_frames=4, next_tail_trim_frames=1, crossfade_frames=4)
-    # hard stitch would be 10 + (8 - 4 - 1) = 13 frames
     assert out.shape[0] == 13
     assert stats["video_crossfade_frames"] == 4
-    # cosine blend starts exactly on previous and ends exactly on next context
     assert torch.allclose(out[6], torch.zeros_like(out[6]))
     assert torch.allclose(out[9], torch.ones_like(out[9]))
 
@@ -47,7 +45,6 @@ def test_audio_join_uses_short_corresponding_context_and_exact_total_duration():
     expected_frames = prev_frames + next_frames - head - tail
     assert out["waveform"].shape[-1] == round(expected_frames / fps * sr)
     assert stats["audio_crossfade_samples"] == 720
-    # End of the short fade lands on the next-context waveform, avoiding a hard step into next body.
     boundary = prev_samples - 1
     assert float(out["waveform"][0, 0, boundary]) > 0.99
 
@@ -71,7 +68,6 @@ def test_luminance_gain_estimator_matches_and_clamps_global_brightness_offset():
 
     prev = torch.full((8, 16, 16, 3), 0.50)
     nxt = torch.full((8, 16, 16, 3), 0.45)
-
     open_stats = estimate_luminance_gain(prev, nxt, max_correction_percent=20.0)
     assert abs(open_stats["luminance_measured_gain"] - (0.50 / 0.45)) < 1e-4
     assert abs(open_stats["luminance_applied_gain"] - (0.50 / 0.45)) < 1e-4
@@ -95,10 +91,8 @@ def test_video_join_luminance_match_removes_boundary_step_then_fades_to_native()
         max_luminance_correction_percent=20.0,
     )
     assert out.shape[0] == 14
-    # The final overlap frame and first genuinely new frame meet at the previous brightness.
     assert abs(float(out[9].mean()) - 0.50) < 1e-4
     assert abs(float(out[10].mean()) - 0.50) < 1e-4
-    # The temporary correction returns to the next clip's native brightness.
     assert abs(float(out[13].mean()) - 0.45) < 1e-4
     assert stats["luminance_fade_frames"] == 4
 
@@ -118,7 +112,6 @@ def test_video_join_can_disable_luminance_match_independently_of_crossfade():
 
 
 def test_luminance_match_does_not_change_audio_join_math():
-    # Video-only boundary correction is deliberately isolated from the tested audio path.
     sr = 32000
     prev = {"waveform": torch.zeros((1, 2, round(10 / 24 * sr))), "sample_rate": sr}
     nxt = {"waveform": torch.ones((1, 2, round(8 / 24 * sr))), "sample_rate": sr}
@@ -142,7 +135,6 @@ def test_streaming_luminance_fade_can_modify_only_boundary_frames_in_place():
 
 def test_safe_tail_bridge_uses_only_phase_alignment_loss_inside_safe_end():
     from seamless_stitch import safe_tail_bridge_plan
-
     handover = {
         "available": True,
         "frame_count": 243,
@@ -159,9 +151,6 @@ def test_safe_tail_bridge_uses_only_phase_alignment_loss_inside_safe_end():
 
 def test_safe_tail_bridge_never_borrows_from_safety_margin_or_exceeds_cap():
     from seamless_stitch import safe_tail_bridge_plan
-
-    # Even if a malformed/experimental metadata object reports a larger ideal gap,
-    # the explicit phase-alignment loss remains the upper bound.
     handover = {
         "available": True,
         "frame_count": 243,
@@ -173,13 +162,11 @@ def test_safe_tail_bridge_never_borrows_from_safety_margin_or_exceeds_cap():
     assert plan["safe_tail_bridge_available_frames"] == 3
     assert plan["safe_tail_bridge_frames"] == 2
     assert plan["safe_tail_bridge_capped"] is True
-
     assert safe_tail_bridge_plan(handover, max_bridge_frames=0)["safe_tail_bridge_frames"] == 0
 
 
 def test_extract_safe_tail_bridge_pixels_are_exact_previous_frames():
     from seamless_stitch import extract_safe_tail_bridge_images
-
     frames = torch.arange(12, dtype=torch.float32).view(12, 1, 1, 1).repeat(1, 1, 1, 3)
     handover = {
         "available": True,
@@ -195,8 +182,6 @@ def test_extract_safe_tail_bridge_pixels_are_exact_previous_frames():
 
 
 def test_safe_tail_bridge_keeps_video_timeline_length_when_next_video_head_is_shifted():
-    # Model the node-level operation: append 2 safe previous pixels, then skip 2
-    # additional early video frames in the next clip. Total duration is unchanged.
     prev = torch.zeros((10, 2, 2, 3), dtype=torch.float32)
     bridge = torch.full((2, 2, 2, 3), 0.25, dtype=torch.float32)
     previous_extended = torch.cat((prev, bridge), dim=0)
@@ -212,7 +197,6 @@ def test_safe_tail_bridge_keeps_video_timeline_length_when_next_video_head_is_sh
     )
     expected = 10 + (12 - original_head - tail)
     assert out.shape[0] == expected
-    # Audio deliberately keeps the original head and therefore the same duration.
     sr = 32000
     prev_audio = {"waveform": torch.zeros((1, 2, round(10 / 24 * sr))), "sample_rate": sr}
     next_audio = {"waveform": torch.ones((1, 2, round(12 / 24 * sr))), "sample_rate": sr}
