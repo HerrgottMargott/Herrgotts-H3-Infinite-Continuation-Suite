@@ -36,9 +36,16 @@ This gives motion, framing and color a hard freeze-safe starting constraint with
 Auto Handover still chooses the actual **video** continuation boundary. It excludes FL2VA's frozen / unstable landing tail and snaps the safe visual cutoff backward to the latest exact Masked-AV boundary. **The previous visible video and the next protected video context end at that same boundary.** Audio may intentionally remain protected beyond it.
 
 ## Example Generation
+🎬 v1.4 Example
 
-▶ **[Watch the 7-clip / ~61-second v1.2 example generation](https://github.com/HerrgottMargott/Herrgotts-H3-Infinite-Continuation-Suite/releases/download/v1.2.0/h3-infinite-7-clip-example.mp4)**
+This example was generated using the new **Native Masked AV continuation** introduced in v1.4. It was stitched together out of 11 individual clips using the example Workflows.
 
+[▶️ Watch the full v1.4 example video](assets/Infinite-Continuation-Suite_v1.4_Example-1.mp4)
+
+The clips are generated individually and continued using the previous clip's video/audio latent context, then stitched into the final sequence.
+
+Older Example (v1.2)
+[Watch the 7-clip / ~61-second v1.2 example generation](https://github.com/HerrgottMargott/Herrgotts-H3-Infinite-Continuation-Suite/releases/download/v1.2.0/h3-infinite-7-clip-example.mp4)**
 That public example was generated with the older guide-based continuation path. v1.4 replaces the guide handover with native in-place latent preservation; v1.4 keeps the freeze-safe video source selection and adds independent protected audio-tail carryover plus Net New Content duration control.
 
 ### Main features
@@ -114,6 +121,57 @@ See the official [MiniMax H3 ComfyUI guide](https://docs.comfy.org/tutorials/vid
 The supplied generation workflows include **Patch Sage Attention KJ** as an optional optimization. Install [ComfyUI-KJNodes](https://github.com/kijai/ComfyUI-KJNodes) plus a compatible SageAttention setup if you want to use it.
 
 SageAttention is **not required** for continuation. If it causes instability or OOMs in your setup, disable/bypass it.
+
+## Usage
+
+### Included workflows
+
+The `examples/` folder contains four annotated v1.4 workflows:
+
+**1. Start — `Herrgotts_H3_Infinite_v1.4_01_Start.json`**  
+Creates Clip 1 with flexible T2VA/I2VA/L2VA/FL2VA conditioning. First/Last Frames are optional; the example keeps First + Last connected because repeated endpoints are the recommended quality-reset workflow.
+
+**2. Continue — `Herrgotts_H3_Infinite_v1.4_02_Continue.json`**  
+Loads a manually selected previous AV latent **plus its Handover metadata** and creates Clip 2+. The safe 39-frame video run ending before the unusable landing tail is copied into the new target and protected by the native video mask. By default, audio starts at the same source point but can stay protected through the previous full audio tail. `Net New Content` is the default Duration mode. Add a new Last Frame and/or Qwen References as desired.
+
+**3. 3-Clip Showcase / Auto Stitch — `Herrgotts_H3_Infinite_v1.4_03_3Clip_Showcase_AutoStitch.json`**  
+Runs Start -> Masked Continue -> Masked Continue in one queue and automatically creates a stitched final video. Additional continuation blocks can be duplicated for Clip 4+.
+
+**4. Stitch Saved Chain — `Herrgotts_H3_Infinite_v1.4_04_Stitch_Saved_Chain.json`**  
+Combines manually numbered clips generated separately. The stitcher decodes one saved AV latent at a time, so peak memory does not scale like one giant decoded all-clips batch. v1.4 chains use the exact shared video boundary; older experimental v1.4 metadata still retains its compatibility offset path.
+
+See [`examples/README.md`](examples/README.md) for a compact workflow guide.
+
+### Recommended v1.4 baseline
+
+Recommended starting settings:
+
+```text
+ComfyUI: current build with native PR #15375 H3 AV-mask support
+Continuation: H3ContinuousContinueV14 / Native Masked AV
+Masked video context: 39 frames
+Duration Mode: Net New Content
+Audio Tail Carryover: Full Previous Tail
+Audio feather: 0 ticks
+Auto Handover: Balanced
+Safe Tail Bridge: 0 (Advanced legacy fallback)
+Video crossfade: 4 frames
+Audio de-click crossfade: 15 ms
+Boundary luminance matching: Off (Advanced legacy fallback)
+```
+
+With `Net New Content = 5 s`, v1.4 chooses 158 total H3 frames for a 39-frame head, leaving **119 newly generated frames (~4.96 s)**. With `Total Generation = 5 s`, the old 124-total-frame behavior remains and leaves 85 new frames (~3.54 s).
+
+## Prompting Guidance
+
+For the best long-form control, treat each segment like a short storyboard transition:
+
+1. describe the action/motion that should happen during this segment;
+2. use a Last Frame when you want a strong endpoint / quality reset;
+3. use Qwen References for identity, clothing or visual details and refer to the current `picture_map` rather than assuming fixed Picture numbers;
+4. v1.4 can carry existing dialogue beyond the visual handover, but still avoid placing a critical word exactly beyond the **actual end of the source clip**, because audio that was never generated cannot be preserved.
+
+The masked previous AV context does **not** need to be mentioned in the prompt. It is already present in the target latent.
 
 ## v1.4 native Masked AV continuation
 
@@ -206,57 +264,6 @@ Picture 3 = Qwen Reference 2
 The `picture_map` output and console log show the actual mapping for each run.
 
 Qwen References are Qwen text/vision inputs only; they are not inserted into `minimax_refs` as persistent native Ref2VA/DiT reference latents.
-
-## Usage
-
-### Included workflows
-
-The `examples/` folder contains four annotated v1.4 workflows:
-
-**1. Start — `Herrgotts_H3_Infinite_v1.4_01_Start.json`**  
-Creates Clip 1 with flexible T2VA/I2VA/L2VA/FL2VA conditioning. First/Last Frames are optional; the example keeps First + Last connected because repeated endpoints are the recommended quality-reset workflow.
-
-**2. Continue — `Herrgotts_H3_Infinite_v1.4_02_Continue.json`**  
-Loads a manually selected previous AV latent **plus its Handover metadata** and creates Clip 2+. The safe 39-frame video run ending before the unusable landing tail is copied into the new target and protected by the native video mask. By default, audio starts at the same source point but can stay protected through the previous full audio tail. `Net New Content` is the default Duration mode. Add a new Last Frame and/or Qwen References as desired.
-
-**3. 3-Clip Showcase / Auto Stitch — `Herrgotts_H3_Infinite_v1.4_03_3Clip_Showcase_AutoStitch.json`**  
-Runs Start -> Masked Continue -> Masked Continue in one queue and automatically creates a stitched final video. Additional continuation blocks can be duplicated for Clip 4+.
-
-**4. Stitch Saved Chain — `Herrgotts_H3_Infinite_v1.4_04_Stitch_Saved_Chain.json`**  
-Combines manually numbered clips generated separately. The stitcher decodes one saved AV latent at a time, so peak memory does not scale like one giant decoded all-clips batch. v1.4 chains use the exact shared video boundary; older experimental v1.4 metadata still retains its compatibility offset path.
-
-See [`examples/README.md`](examples/README.md) for a compact workflow guide.
-
-### Recommended v1.4 baseline
-
-Recommended starting settings:
-
-```text
-ComfyUI: current build with native PR #15375 H3 AV-mask support
-Continuation: H3ContinuousContinueV14 / Native Masked AV
-Masked video context: 39 frames
-Duration Mode: Net New Content
-Audio Tail Carryover: Full Previous Tail
-Audio feather: 0 ticks
-Auto Handover: Balanced
-Safe Tail Bridge: 0 (Advanced legacy fallback)
-Video crossfade: 4 frames
-Audio de-click crossfade: 15 ms
-Boundary luminance matching: Off (Advanced legacy fallback)
-```
-
-With `Net New Content = 5 s`, v1.4 chooses 158 total H3 frames for a 39-frame head, leaving **119 newly generated frames (~4.96 s)**. With `Total Generation = 5 s`, the old 124-total-frame behavior remains and leaves 85 new frames (~3.54 s).
-
-## Prompting Guidance
-
-For the best long-form control, treat each segment like a short storyboard transition:
-
-1. describe the action/motion that should happen during this segment;
-2. use a Last Frame when you want a strong endpoint / quality reset;
-3. use Qwen References for identity, clothing or visual details and refer to the current `picture_map` rather than assuming fixed Picture numbers;
-4. v1.4 can carry existing dialogue beyond the visual handover, but still avoid placing a critical word exactly beyond the **actual end of the source clip**, because audio that was never generated cannot be preserved.
-
-The masked previous AV context does **not** need to be mentioned in the prompt. It is already present in the target latent.
 
 ## Included Nodes
 
