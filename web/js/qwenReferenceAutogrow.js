@@ -3,6 +3,8 @@ import { app } from "../../scripts/app.js";
 const TARGET_CLASSES = new Set([
     "H3ContinuousStartV13",
     "H3ContinuousContinueV13",
+    "H3ContinuousStartV14",
+    "H3ContinuousContinueV14",
 ]);
 const PREFIX = "qwen_reference_";
 const MAX_REFERENCES = 9;
@@ -136,7 +138,7 @@ function scheduleReconcile(node) {
 }
 
 app.registerExtension({
-    name: "Herrgotts.H3Infinite.QwenReferenceAutogrow.v130",
+    name: "Herrgotts.H3Infinite.QwenReferenceAutogrow.v140",
 
     async beforeRegisterNodeDef(nodeType, nodeData) {
         if (!isTargetDefinition(nodeType, nodeData)) return;

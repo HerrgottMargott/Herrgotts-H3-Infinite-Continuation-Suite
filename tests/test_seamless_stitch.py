@@ -204,3 +204,49 @@ def test_safe_tail_bridge_keeps_video_timeline_length_when_next_video_head_is_sh
         prev_audio, next_audio, 10, 12, original_head, tail, crossfade_ms=15.0, fps=24
     )
     assert audio["waveform"].shape[-1] == round(expected / 24 * sr)
+
+
+def test_masked_av_context_tail_offset_moves_video_overlap_anchor_without_changing_body_trim():
+    # Reused next head represents source frames 5..9. Previous visible output was
+    # trimmed two frames earlier (ends at source frame 7), so the corresponding
+    # overlap endpoint is next-head index 3 rather than the end of the 5-frame head.
+    prev = torch.full((6, 1, 1, 3), 7.0)
+    nxt = torch.zeros((9, 1, 1, 3))
+    nxt[:5] = torch.tensor([5., 6., 7., 8., 9.]).view(5, 1, 1, 1)
+    nxt[5:] = 20.0
+    out, stats = context_aligned_video_join(
+        prev, nxt, next_head_context_frames=5, next_tail_trim_frames=0,
+        crossfade_frames=1, context_tail_offset_frames=2,
+    )
+    assert stats["context_tail_offset_frames"] == 2
+    assert stats["video_crossfade_frames"] == 1
+    # 6 previous + (9-5) future frames: reused head remains fully removed.
+    assert out.shape[0] == 10
+    # Crossfade uses next context source-frame 7, not source-frame 9.
+    assert abs(float(out[5].mean()) - 7.0) < 1e-6
+    assert torch.allclose(out[6:], torch.full_like(out[6:], 20.0))
+
+
+def test_masked_av_context_tail_offset_moves_audio_overlap_anchor_and_keeps_duration():
+    sr = 24000
+    fps = 24
+    prev_frames = 6
+    next_frames = 9
+    head = 5
+    offset = 2
+    prev_samples = round(prev_frames / fps * sr)
+    next_samples = round(next_frames / fps * sr)
+    prev = {"waveform": torch.full((1, 2, prev_samples), 0.7), "sample_rate": sr}
+    wave = torch.zeros((1, 2, next_samples))
+    # Context source frames 5,6,7,8,9 -> 0.5,0.6,0.7,0.8,0.9.
+    for i, value in enumerate((0.5, 0.6, 0.7, 0.8, 0.9)):
+        wave[..., i * 1000:(i + 1) * 1000] = value
+    wave[..., head * 1000:] = 1.0
+    nxt = {"waveform": wave, "sample_rate": sr}
+    out, stats = context_aligned_audio_join(
+        prev, nxt, previous_output_frames=prev_frames, next_total_frames=next_frames,
+        next_head_context_frames=head, next_tail_trim_frames=0,
+        crossfade_ms=1.0, fps=fps, context_tail_offset_frames=offset,
+    )
+    assert stats["context_tail_offset_frames"] == offset
+    assert out["waveform"].shape[-1] == round((prev_frames + next_frames - head) / fps * sr)

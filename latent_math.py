@@ -323,6 +323,115 @@ def phase_aligned_extended_context_slice(
         "source_end_phase": end_t % 5,
     }
 
+
+def is_exact_masked_av_context(frame_count: int) -> bool:
+    """Return True for joint H3 video/audio prefix durations.
+
+    A masked AV prefix must be a normal H3 video-VAE run (17k+5 frames)
+    and end on an integer 40 Hz audio-latent tick.  At 24 fps this yields
+    39, 90, 141, 192, ... frames.
+    """
+    frame_count = int(frame_count)
+    return frame_count >= 39 and (frame_count - 39) % 51 == 0
+
+
+def snap_masked_av_context_length(requested: int, available: int, target_frames: int) -> int:
+    """Snap a requested protected prefix down to the largest exact AV run."""
+    cap = min(int(requested), int(available), int(target_frames) - 1)
+    if cap < 39:
+        raise ValueError(
+            "Masked AV continuation needs at least 39 usable source frames and "
+            "a target clip longer than 39 frames"
+        )
+    run = 39 + ((cap - 39) // 51) * 51
+    if not is_exact_masked_av_context(run):
+        raise RuntimeError("Internal masked AV context snap failed")
+    return run
+
+
+def masked_av_context_slice(
+    video_latent_t: int,
+    context_frames: int,
+    target_frames: int,
+    *,
+    ideal_last_frame: int | None = None,
+    desired_tail_frames: int | None = None,
+):
+    """Select a phase-canonical source run for in-place masked AV continuation.
+
+    The copied run must fit the target prefix, have an exact joint 24-fps /
+    40-Hz duration, and start on H3 video-latent phase 0 so the copied latent
+    tokens occupy the same temporal phase at the new target head.  The source
+    end is therefore snapped to the latest phase-2 latent boundary at/before
+    the requested handover cutoff.
+    """
+    video_latent_t = int(video_latent_t)
+    target_frames = int(target_frames)
+    boundaries = latent_boundaries(video_latent_t)
+    previous_frame_count = boundaries[-1]
+    n = snap_masked_av_context_length(context_frames, previous_frame_count, target_frames)
+    if (ideal_last_frame is None) == (desired_tail_frames is None):
+        raise ValueError("Provide exactly one of ideal_last_frame or desired_tail_frames")
+
+    if ideal_last_frame is not None:
+        ideal_last_frame = max(n - 1, min(previous_frame_count - 1, int(ideal_last_frame)))
+        desired_end_exclusive = ideal_last_frame + 1
+    else:
+        desired_tail_frames = max(0, int(desired_tail_frames))
+        desired_end_exclusive = max(n, previous_frame_count - desired_tail_frames)
+        ideal_last_frame = desired_end_exclusive - 1
+
+    # n is guaranteed to lie on H3's 17k+5 grid.
+    context_steps = 2 + 5 * ((n - 5) // 17)
+
+    end_t = None
+    for candidate in range(video_latent_t, context_steps - 1, -1):
+        if candidate % 5 != 2:
+            continue
+        if boundaries[candidate] <= desired_end_exclusive:
+            start = candidate - context_steps
+            if start >= 0 and start % 5 == 0:
+                end_t = candidate
+                break
+    if end_t is None:
+        raise ValueError(
+            "Previous latent has no phase-aligned masked AV context before the requested handover cutoff"
+        )
+
+    start_t = end_t - context_steps
+    source_start_frame = boundaries[start_t]
+    source_end_frame = boundaries[end_t]
+    actual_context_frames = source_end_frame - source_start_frame
+    if actual_context_frames != n:
+        raise RuntimeError(
+            f"Internal masked AV run has {actual_context_frames} frames, expected {n}"
+        )
+    if start_t % 5 != 0 or end_t % 5 != 2:
+        raise RuntimeError("Internal masked AV source phase is not canonical")
+
+    ignored_tail_frames = previous_frame_count - source_end_frame
+    cutoff_loss_frames = desired_end_exclusive - source_end_frame
+    if cutoff_loss_frames < 0:
+        raise RuntimeError("Masked AV latent cutoff crossed the desired pixel cutoff")
+
+    return {
+        "mode": "masked_av",
+        "start_t": start_t,
+        "end_t": end_t,
+        "context_steps": context_steps,
+        "offsets": step_offsets(context_steps),
+        "source_start_frame": source_start_frame,
+        "source_end_frame": source_end_frame,
+        "previous_frame_count": previous_frame_count,
+        "requested_context_frames": int(context_frames),
+        "actual_context_frames": n,
+        "ideal_handover_end_frame": ideal_last_frame,
+        "ignored_tail_frames": ignored_tail_frames,
+        "cutoff_loss_frames": cutoff_loss_frames,
+        "source_start_phase": start_t % 5,
+        "source_end_phase": end_t % 5,
+    }
+
 def audio_slice_for_pixel_window(audio_t: int, source_start_frame: int, source_end_frame: int):
     """Map a source pixel-frame window onto the saved 40 Hz audio latent grid."""
     audio_t = int(audio_t)
@@ -341,6 +450,67 @@ def audio_slice_for_pixel_window(audio_t: int, source_start_frame: int, source_e
     exact_end = source_end_frame * AUDIO_HZ / FPS
     end_error_steps = float(a1) - float(exact_end)
     return a0, a1, end_error_steps
+
+
+
+def normalize_audio_tail_mode(value: str) -> str:
+    """Normalize the v1.4 audio-tail carryover policy."""
+    text = str(value).strip().lower().replace("_", " ")
+    aliases = {
+        "full previous tail": "full_previous_tail",
+        "full tail": "full_previous_tail",
+        "full": "full_previous_tail",
+        "match video handover": "match_video_handover",
+        "match video context": "match_video_handover",
+        "match video": "match_video_handover",
+        "video": "match_video_handover",
+    }
+    if text not in aliases:
+        raise ValueError(f"Unknown audio tail carryover mode {value!r}")
+    return aliases[text]
+
+
+def masked_av_audio_context_plan(audio_t: int, source_start_frame: int,
+                                 video_source_end_frame: int, previous_frame_count: int,
+                                 mode: str = "Full Previous Tail"):
+    """Plan independent H3 audio protection for a Masked-AV continuation.
+
+    Video stays anchored to the freeze-safe Masked-AV handover window.  Audio
+    may either end at the same visual handover (legacy Candidate-4 behavior) or
+    continue through the original previous clip's full remaining audio tail.
+    All frame endpoints are exclusive pixel-frame positions.
+    """
+    audio_t = int(audio_t)
+    start = int(source_start_frame)
+    video_end = int(video_source_end_frame)
+    previous_end = int(previous_frame_count)
+    if previous_end <= 0:
+        raise ValueError("previous_frame_count must be > 0")
+    if start < 0 or video_end <= start or video_end > previous_end:
+        raise ValueError(
+            f"Invalid Masked-AV audio source geometry start={start}, video_end={video_end}, previous={previous_end}"
+        )
+    normalized = normalize_audio_tail_mode(mode)
+    audio_end_frame = previous_end if normalized == "full_previous_tail" else video_end
+    a0, a1, end_error = audio_slice_for_pixel_window(audio_t, start, audio_end_frame)
+    _, video_a1, _ = audio_slice_for_pixel_window(audio_t, start, video_end)
+    baseline_steps = int(video_a1 - a0)
+    steps = int(a1 - a0)
+    extra_ticks = max(0, steps - baseline_steps)
+    return {
+        "mode": normalized,
+        "source_start_frame": start,
+        "video_source_end_frame": video_end,
+        "audio_source_end_frame": audio_end_frame,
+        "start_tick": int(a0),
+        "end_tick": int(a1),
+        "audio_steps": steps,
+        "video_context_audio_steps": baseline_steps,
+        "extra_tail_ticks": int(extra_ticks),
+        "extra_tail_seconds": float(extra_ticks) / float(AUDIO_HZ),
+        "extra_tail_frame_equivalent": max(0, audio_end_frame - video_end),
+        "end_error_steps": float(end_error),
+    }
 
 
 def snap_landing_tail(frame_count: int, ideal_last_frame: int, context_frames: int):

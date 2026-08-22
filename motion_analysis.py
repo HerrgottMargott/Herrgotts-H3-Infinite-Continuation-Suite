@@ -476,6 +476,13 @@ def analyze_freeze_tail(
         "primary_final_match_ratio_percent": float(primary_gate_info["match_ratio"] * 100.0),
         "primary_final_max_consecutive_outliers": int(primary_gate_info["max_outlier_streak"]),
         "primary_gate_passed": bool(primary_gate_info["passed"]),
+        # Even when the secondary residual-motion gate rejects a hard freeze,
+        # keep the first stable-final-state candidate for v1.4 render-only
+        # safety. Native Masked AV decouples this visible trim from the actual
+        # continuation latent, so a soft final-state tail can be removed without
+        # weakening temporal continuity.
+        "primary_candidate_start_frame": int(start + primary_candidate_idx) if primary_candidate_idx is not None else -1,
+        "primary_candidate_trailing_frames": int(len(stats["final_match"]) - primary_candidate_idx) if primary_candidate_idx is not None else 0,
         # Final-state similarity thresholds + diagnostics.
         "final_mean_diff_threshold": float(final_mean_diff_threshold),
         "final_active_pixel_threshold": float(final_active_pixel_threshold),

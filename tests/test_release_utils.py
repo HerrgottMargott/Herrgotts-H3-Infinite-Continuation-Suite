@@ -8,11 +8,15 @@ from release_utils import (
     BALANCED_FREEZE_PRESET,
     MOTION_SAFE_FREEZE_PRESET,
     duration_to_requested_frames,
+    normalize_duration_mode,
+    nearest_h3_frame_count,
+    masked_av_duration_plan,
     normalize_alignment_mode,
     normalize_safety_mode,
     resolve_freeze_settings,
     stitch_trim_plan,
     apply_no_lock_fallback,
+    masked_av_render_trim,
 )
 
 
@@ -145,3 +149,121 @@ def test_v11_no_lock_fallback_does_not_modify_detected_lock_cutoff():
     assert result["no_lock_fallback_applied"] is False
     assert result["handover_end_frame"] == 212
     assert result["landing_tail_frames"] == 30
+
+
+def test_v14_masked_av_no_lock_fallback_uses_full_hold_plus_safety_and_is_not_phase_snapped():
+    result = masked_av_render_trim(
+        124, freeze_detected=False, ideal_handover_end_frame=None, freeze_hold=8, safety_margin=3
+    )
+    assert result["render_safety_applied"] is True
+    assert result["render_safety_mode"] == "no_lock_fallback"
+    assert result["render_safety_frames"] == 11
+    assert result["landing_tail_frames"] == 11
+    assert result["handover_end_frame"] == 112
+    assert result["policy"] == "no freeze candidate -> render-only safety trim 11f"
+
+
+def test_v14_masked_av_soft_final_state_candidate_beats_fixed_fallback():
+    result = masked_av_render_trim(
+        124, freeze_detected=False, ideal_handover_end_frame=None, freeze_hold=8, safety_margin=3,
+        soft_final_candidate_start_frame=112,
+    )
+    assert result["render_safety_applied"] is True
+    assert result["render_safety_mode"] == "soft_final_state"
+    assert result["soft_final_candidate_used"] is True
+    assert result["handover_end_frame"] == 108
+    assert result["landing_tail_frames"] == 15
+    assert result["policy"] == "soft final-state tail -> trim 15f (candidate 112, safety 3f)"
+
+
+def test_v14_masked_av_detected_freeze_uses_detector_endpoint_without_extra_fallback():
+    result = masked_av_render_trim(124, freeze_detected=True, ideal_handover_end_frame=108, freeze_hold=8, safety_margin=3)
+    assert result["render_safety_applied"] is False
+    assert result["render_safety_frames"] == 0
+    assert result["landing_tail_frames"] == 15
+    assert result["handover_end_frame"] == 108
+    assert result["policy"] == "freeze detected -> exact safe pixel trim"
+
+
+def test_v14_masked_av_render_safety_can_be_disabled_with_hold_one():
+    result = masked_av_render_trim(124, freeze_detected=False, ideal_handover_end_frame=None, freeze_hold=1)
+    assert result["render_safety_applied"] is False
+    assert result["landing_tail_frames"] == 0
+    assert result["handover_end_frame"] == 123
+
+
+def test_masked_av_safe_handover_uses_one_shared_boundary():
+    from release_utils import masked_av_safe_handover_plan
+    visual = {
+        "handover_end_frame": 113,
+        "landing_tail_frames": 10,
+        "policy": "test safe visual endpoint",
+    }
+    plan = masked_av_safe_handover_plan(124, visual, 39)
+    assert plan["desired_handover_end_frame"] == 113
+    assert plan["handover_end_frame"] == 106
+    assert plan["landing_tail_frames"] == 17
+    assert plan["masked_av_cutoff_loss_frames"] == 7
+    assert plan["masked_av_source_start_frame"] == 68
+    assert plan["masked_av_source_end_frame"] == 107
+    assert plan["masked_av_context_frames"] == 39
+
+
+def test_masked_av_safe_handover_never_crosses_visual_cutoff():
+    from release_utils import masked_av_safe_handover_plan
+    for desired in range(38, 124):
+        plan = masked_av_safe_handover_plan(124, {"handover_end_frame": desired}, 39)
+        assert plan["handover_end_frame"] <= desired
+        assert plan["masked_av_source_end_frame"] - 1 == plan["handover_end_frame"]
+        assert plan["masked_av_source_end_frame"] - plan["masked_av_source_start_frame"] == 39
+        assert plan["landing_tail_frames"] == 123 - plan["handover_end_frame"]
+
+
+def test_candidate4_shared_boundary_matches_stitch_ready_and_next_context():
+    from release_utils import masked_av_safe_handover_plan, stitch_trim_plan
+    visual = {"handover_end_frame": 113, "policy": "test"}
+    plan = masked_av_safe_handover_plan(124, visual, 39)
+    handover = {
+        "available": True,
+        "frame_count": 124,
+        "handover_end_frame": plan["handover_end_frame"],
+        "landing_tail_frames": plan["landing_tail_frames"],
+        "masked_av_source_policy": "safe_handover_window",
+        "masked_av_source_start_frame": plan["masked_av_source_start_frame"],
+        "masked_av_source_end_frame": plan["masked_av_source_end_frame"],
+    }
+    trim = stitch_trim_plan(124, "Stitch Ready", 0, handover)
+    assert trim["tail_trim_frames"] == 17
+    assert trim["kept_frames"] == 107
+    # Stitch Ready keeps frames 0..106, and the next protected context ends at 106.
+    assert handover["masked_av_source_end_frame"] - 1 == handover["handover_end_frame"] == 106
+
+
+
+def test_candidate6_net_new_content_5s_targets_about_five_visible_new_seconds():
+    plan = masked_av_duration_plan(5.0, 39, "Net New Content")
+    assert plan["duration_mode"] == "net_new_content"
+    assert plan["total_frame_count"] == 158
+    assert plan["net_new_frames"] == 119
+    assert abs(plan["net_new_seconds"] - (119 / 24.0)) < 1e-9
+
+
+def test_candidate6_total_generation_5s_preserves_legacy_whole_clip_meaning():
+    plan = masked_av_duration_plan(5.0, 39, "Total Generation")
+    assert plan["duration_mode"] == "total_generation"
+    assert plan["total_frame_count"] == 124
+    assert plan["net_new_frames"] == 85
+
+
+def test_candidate6_net_new_content_10s_uses_nearest_legal_h3_grid():
+    plan = masked_av_duration_plan(10.0, 39, "Net New Content")
+    assert plan["total_frame_count"] == 277
+    assert plan["net_new_frames"] == 238
+    assert abs(plan["net_new_seconds"] - (238 / 24.0)) < 1e-9
+
+
+def test_candidate6_duration_mode_default_is_net_new_content():
+    plan = masked_av_duration_plan(5.0, 39)
+    assert plan["duration_mode"] == "net_new_content"
+    assert normalize_duration_mode("Net New Content") == "net_new_content"
+    assert nearest_h3_frame_count(159, min_frames=40) == 158
