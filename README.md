@@ -45,7 +45,8 @@ This example was generated using the new **Native Masked AV continuation** intro
 The clips are generated individually and continued using the previous clip's video/audio latent context, then stitched into the final sequence.
 
 Older Example (v1.2)
-[Watch the 7-clip / ~61-second v1.2 example generation](https://github.com/HerrgottMargott/Herrgotts-H3-Infinite-Continuation-Suite/releases/download/v1.2.0/h3-infinite-7-clip-example.mp4)**
+[Watch the 7-clip / ~61-second v1.2 example generation](https://github.com/HerrgottMargott/Herrgotts-H3-Infinite-Continuation-Suite/releases/download/v1.2.0/h3-infinite-7-clip-example.mp4)
+
 That public example was generated with the older guide-based continuation path. v1.4 replaces the guide handover with native in-place latent preservation; v1.4 keeps the freeze-safe video source selection and adds independent protected audio-tail carryover plus Net New Content duration control.
 
 ### Main features
