@@ -124,3 +124,78 @@ def test_phase_aligned_extended_is_canonical_for_all_late_cutoffs():
         assert 0 <= s["cutoff_loss_frames"] <= 3
         assert s["actual_context_frames"] >= 22
         assert s["offsets"] == step_offsets(s["context_steps"])
+
+
+def test_masked_av_exact_joint_context_lengths():
+    from latent_math import is_exact_masked_av_context
+    assert [n for n in (39, 90, 141, 192) if is_exact_masked_av_context(n)] == [39, 90, 141, 192]
+    for n in (5, 22, 38, 40, 56, 73, 89, 91):
+        assert not is_exact_masked_av_context(n)
+
+
+def test_masked_av_true_tail_39_for_124_frame_clip():
+    from latent_math import masked_av_context_slice, video_latent_t
+    s = masked_av_context_slice(
+        video_latent_t(124), 39, 124, ideal_last_frame=123
+    )
+    assert s["source_start_frame"] == 85
+    assert s["source_end_frame"] == 124
+    assert (s["start_t"], s["end_t"]) == (25, 37)
+    assert s["context_steps"] == 12
+    assert s["actual_context_frames"] == 39
+    assert s["ignored_tail_frames"] == 0
+    assert s["source_start_phase"] == 0
+    assert s["source_end_phase"] == 2
+
+
+def test_masked_av_true_tail_39_maps_to_exact_65_audio_ticks():
+    from latent_math import masked_av_context_slice, video_latent_t, audio_slice_for_pixel_window
+    _, _, at = temporal_shape(124)
+    s = masked_av_context_slice(video_latent_t(124), 39, 124, ideal_last_frame=123)
+    a0, a1, _ = audio_slice_for_pixel_window(at, s["source_start_frame"], s["source_end_frame"])
+    assert (a0, a1) == (142, 207)
+    assert a1 - a0 == 65
+
+
+def test_masked_av_context_snaps_down_when_source_is_shorter():
+    from latent_math import masked_av_context_slice, video_latent_t
+    s = masked_av_context_slice(video_latent_t(124), 141, 124, ideal_last_frame=123)
+    assert s["actual_context_frames"] == 90
+    assert s["source_end_frame"] == 124
+    assert s["ignored_tail_frames"] == 0
+
+
+def test_masked_av_requires_target_longer_than_minimum_prefix():
+    from latent_math import snap_masked_av_context_length
+    import pytest
+    with pytest.raises(ValueError):
+        snap_masked_av_context_length(39, 124, 39)
+
+
+def test_candidate6_full_previous_audio_tail_extends_beyond_video_handover():
+    from latent_math import masked_av_audio_context_plan
+    plan = masked_av_audio_context_plan(207, 68, 107, 124, "Full Previous Tail")
+    assert plan["mode"] == "full_previous_tail"
+    assert (plan["start_tick"], plan["end_tick"]) == (113, 207)
+    assert plan["video_context_audio_steps"] == 65
+    assert plan["audio_steps"] == 94
+    assert plan["extra_tail_ticks"] == 29
+    assert plan["extra_tail_frame_equivalent"] == 17
+    assert abs(plan["extra_tail_seconds"] - 0.725) < 1e-9
+
+
+def test_candidate6_match_video_audio_tail_reproduces_candidate4_65_ticks():
+    from latent_math import masked_av_audio_context_plan
+    plan = masked_av_audio_context_plan(207, 68, 107, 124, "Match Video Handover")
+    assert plan["mode"] == "match_video_handover"
+    assert (plan["start_tick"], plan["end_tick"]) == (113, 178)
+    assert plan["audio_steps"] == 65
+    assert plan["extra_tail_ticks"] == 0
+    assert plan["extra_tail_seconds"] == 0.0
+
+
+def test_candidate6_audio_tail_policy_rejects_unknown_mode():
+    import pytest
+    from latent_math import masked_av_audio_context_plan
+    with pytest.raises(ValueError):
+        masked_av_audio_context_plan(207, 68, 107, 124, "invented")

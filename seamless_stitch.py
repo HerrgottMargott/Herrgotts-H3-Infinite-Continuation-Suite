@@ -279,7 +279,8 @@ def fit_audio_length(waveform: torch.Tensor, target_samples: int) -> torch.Tenso
 
 def context_aligned_video_join(previous_images: torch.Tensor, next_images: torch.Tensor,
                                next_head_context_frames: int, next_tail_trim_frames: int,
-                               crossfade_frames: int = 4, luminance_match: bool = False,
+                               crossfade_frames: int = 4, context_tail_offset_frames: int = 0,
+                               luminance_match: bool = False,
                                luminance_fade_frames: int = 16,
                                max_luminance_correction_percent: float = 10.0) -> tuple[torch.Tensor, dict[str, Any]]:
     """Join decoded clips without changing the hard-stitch timeline length.
@@ -304,8 +305,15 @@ def context_aligned_video_join(previous_images: torch.Tensor, next_images: torch
 
     next_end = total_next - tail if tail else total_next
     next_body = next_images[head:next_end].to(previous_images.device, previous_images.dtype)
+    # Native Masked AV can preserve the true final source tail while the previous
+    # rendered clip is trimmed earlier to remove a freeze. In that case the
+    # time-corresponding previous endpoint lies *inside* the reused next head.
+    # ``context_tail_offset_frames`` shifts only the overlap anchor; the full
+    # protected head is still removed before appending new future frames.
+    context_offset = max(0, min(head, int(context_tail_offset_frames)))
+    overlap_end = head - context_offset
     requested = max(0, int(crossfade_frames))
-    n = min(requested, head, int(previous_images.shape[0]))
+    n = min(requested, overlap_end, int(previous_images.shape[0]))
 
     luma_stats: dict[str, Any] = {
         "luminance_match_enabled": bool(luminance_match),
@@ -317,10 +325,10 @@ def context_aligned_video_join(previous_images: torch.Tensor, next_images: torch
     }
     gain = 1.0
     if bool(luminance_match) and head > 0 and int(previous_images.shape[0]) > 0:
-        analysis_n = min(LUMINANCE_ANALYSIS_FRAMES, head, int(previous_images.shape[0]))
+        analysis_n = min(LUMINANCE_ANALYSIS_FRAMES, overlap_end, int(previous_images.shape[0]))
         measured = estimate_luminance_gain(
             previous_images[-analysis_n:],
-            next_images[head - analysis_n:head].to(previous_images.device, previous_images.dtype),
+            next_images[overlap_end - analysis_n:overlap_end].to(previous_images.device, previous_images.dtype),
             max_correction_percent=float(max_luminance_correction_percent),
         )
         luma_stats.update(measured)
@@ -332,19 +340,21 @@ def context_aligned_video_join(previous_images: torch.Tensor, next_images: torch
         out = torch.cat((previous_images, next_body), dim=0)
         return out, {
             "video_crossfade_frames": 0,
+            "context_tail_offset_frames": context_offset,
             "next_kept_frames": int(next_body.shape[0]),
             **luma_stats,
         }
 
     previous_prefix = previous_images[:-n]
     previous_tail = previous_images[-n:]
-    next_overlap = next_images[head - n:head].to(previous_images.device, previous_images.dtype)
+    next_overlap = next_images[overlap_end - n:overlap_end].to(previous_images.device, previous_images.dtype)
     if bool(luminance_match):
         next_overlap = apply_rgb_gain(next_overlap, gain)
     blended = blend_video_overlap(previous_tail, next_overlap)
     out = torch.cat((previous_prefix, blended, next_body), dim=0)
     return out, {
         "video_crossfade_frames": n,
+        "context_tail_offset_frames": context_offset,
         "next_kept_frames": int(next_body.shape[0]),
         **luma_stats,
     }
@@ -353,7 +363,8 @@ def context_aligned_video_join(previous_images: torch.Tensor, next_images: torch
 def context_aligned_audio_join(previous_audio: dict | None, next_audio: dict | None,
                                previous_output_frames: int, next_total_frames: int,
                                next_head_context_frames: int, next_tail_trim_frames: int,
-                               crossfade_ms: float = 15.0, fps: float = FPS) -> tuple[dict | None, dict[str, int]]:
+                               crossfade_ms: float = 15.0, fps: float = FPS,
+                               context_tail_offset_frames: int = 0) -> tuple[dict | None, dict[str, int]]:
     """Join AUDIO tensors with a short equal-gain de-click crossfade.
 
     The crossfade uses the time-corresponding end of the next clip's reused
@@ -404,12 +415,15 @@ def context_aligned_audio_join(previous_audio: dict | None, next_audio: dict | N
         raise ValueError("next audio is shorter than its declared context head")
     next_body = next_w[..., head_samples:head_samples + next_body_samples]
 
+    context_offset = max(0, min(head, int(context_tail_offset_frames)))
+    context_offset_samples = int(round(context_offset / float(fps) * sr))
+    overlap_end_samples = max(0, head_samples - context_offset_samples)
     requested = max(0, int(round(float(crossfade_ms) / 1000.0 * sr)))
-    n = min(requested, head_samples, int(prev_w.shape[-1]))
+    n = min(requested, overlap_end_samples, int(prev_w.shape[-1]))
     if n <= 0:
         joined = torch.cat((prev_w, next_body.to(prev_w.device, prev_w.dtype)), dim=-1)
     else:
-        next_overlap = next_w[..., head_samples - n:head_samples].to(prev_w.device, prev_w.dtype)
+        next_overlap = next_w[..., overlap_end_samples - n:overlap_end_samples].to(prev_w.device, prev_w.dtype)
         prev_prefix = prev_w[..., :-n]
         prev_tail = prev_w[..., -n:]
         blended = blend_audio_overlap(prev_tail, next_overlap)
@@ -421,6 +435,7 @@ def context_aligned_audio_join(previous_audio: dict | None, next_audio: dict | N
     return {"waveform": joined, "sample_rate": sr}, {
         "audio_crossfade_samples": n,
         "audio_crossfade_ms_effective": int(round(n / sr * 1000.0)) if sr else 0,
+        "context_tail_offset_frames": context_offset,
         "next_kept_frames": next_kept_frames,
     }
 

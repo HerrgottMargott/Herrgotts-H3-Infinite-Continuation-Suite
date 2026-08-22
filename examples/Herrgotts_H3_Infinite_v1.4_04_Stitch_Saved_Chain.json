@@ -23,9 +23,9 @@
       "properties": {
         "Node name for S&R": "MarkdownNote"
       },
-      "title": "START HERE — Stitch Individually Generated Clips v1.3",
+      "title": "START HERE — Stitch Individually Generated Clips v1.4",
       "widgets_values": [
-        "# Herrgotts H3 Infinite v1.3 — Stitch Saved Chain\n\nUse this workflow after generating clips separately with the **v1.3 Start** and **v1.3 Continue** workflows. It reads the manually numbered **full AV latents** (`clip_00001.safetensors`, `clip_00002.safetensors`, ...), reconstructs the freeze-safe boundaries and writes one final MP4.\n\n### Normal use\n1. Load the same **Video VAE** and **Audio VAE** used for generation.\n2. Keep `latent_prefix = h3_continuous/clip` if you used the example Save nodes.\n3. `first_clip = 1`. Leave `last_clip = 0` to stitch through the highest numbered saved clip, or set an explicit final clip.\n4. Recommended seam defaults remain unchanged: **Safe Tail Bridge max 2 frames**, **4 video crossfade frames**, **15 ms audio crossfade**, **luminance match OFF**.\n5. Queue this workflow. No H3 diffusion model or text encoder is needed.\n\nv1.3 deliberately keeps the proven **manual Save / Load clip indexing** used by earlier releases. First/Last keyframe flexibility and Qwen References affect conditioning during generation; the stable stitching format remains unchanged.\n"
+        "# Herrgotts H3 Infinite v1.4 — Stitch Saved Chain (v1.4)\n\nUse this after generating clips separately with the v1.4 Start / v1.4 Native Masked AV Continue workflows. It reads the manually numbered full AV latents and writes one final MP4.\n\n### Normal use\n1. Load the same Video VAE and Audio VAE used for generation.\n2. Keep `latent_prefix = h3_continuous/clip` for the example Save nodes.\n3. `first_clip = 1`; leave `last_clip = 0` to use the highest numbered clip.\n4. v1.4 defaults: **Safe Tail Bridge 0**, 4-frame video blend, 15 ms audio de-click, luminance match OFF.\n5. Queue. No H3 diffusion model or Qwen encoder is needed.\n\nv1.4 saved continuation latents can contain audio protected beyond the 39f video handover. The stitcher removes the normal duplicate head while naturally retaining that useful extra audio tail."
       ]
     },
     {
@@ -98,7 +98,7 @@
     },
     {
       "id": 4,
-      "type": "H3ContinuousStitchSavedChainV11",
+      "type": "H3ContinuousStitchSavedChainV14",
       "pos": [
         -300,
         120
@@ -135,9 +135,9 @@
         }
       ],
       "properties": {
-        "Node name for S&R": "H3ContinuousStitchSavedChainV11",
+        "Node name for S&R": "H3ContinuousStitchSavedChainV14",
         "cnr_id": "herrgotts-h3-infinite-continuation-suite",
-        "ver": "1.3.0"
+        "ver": "1.4.0"
       },
       "widgets_values": [
         "h3_continuous/clip",
@@ -150,7 +150,7 @@
         16,
         10.0,
         18,
-        2
+        0
       ],
       "title": "STITCH SAVED CHAIN — Memory-Bounded"
     },
@@ -175,7 +175,7 @@
       },
       "title": "INFO — Why this scales to long chains",
       "widgets_values": [
-        "### Memory behavior\nThe stitcher does **not** decode every clip into one giant ComfyUI IMAGE batch. It processes one saved AV latent at a time, writes finished frames/audio directly into the output MP4, keeps only a tiny boundary buffer, then releases the decoded clip.\n\nSafe Tail Bridge needs at most **2 extra rendered frames** by default, plus the short video/audio crossfade buffers. Peak RAM/VRAM therefore stays roughly tied to **one decoded H3 clip + the two VAEs**, rather than growing with 10, 20 or 50 clips. Disk usage still grows with saved latents and the final video."
+        "### Memory behavior\nThe stitcher does **not** decode every clip into one giant ComfyUI IMAGE batch. It processes one saved AV latent at a time, writes finished frames/audio directly into the output MP4, keeps only a tiny boundary buffer, then releases the decoded clip.\n\nv1.4 defaults Safe Tail Bridge to **0**, so only the short video/audio crossfade buffers are normally required at each boundary. The legacy bridge option can still add a few frames when explicitly enabled for older guide chains. Peak RAM/VRAM therefore stays roughly tied to **one decoded H3 clip + the two VAEs**, rather than growing with 10, 20 or 50 clips. Disk usage still grows with saved latents and the final video."
       ],
       "color": "#3f3f3f",
       "bgcolor": "#575757"
@@ -201,7 +201,7 @@
       },
       "title": "INFO — Saved metadata / manual indexing",
       "widgets_values": [
-        "### Self-describing saved clips\nSaved clips store each clip's **actual reused head-context length** together with its full AV latent and Auto Handover metadata. This lets the stitcher reconstruct the correct boundaries without the original generation graph.\n\nGeneration Save / Load indices remain intentionally **manual** in v1.3: keep a predictable sequence such as `clip_00001`, `clip_00002`, ... and choose the exact index when continuing or overwriting a branch.\n\nOlder saved clips can often still work because the stitcher can recover the next head length from the previous clip's phase-aligned handover metadata. If required information is missing, it stops instead of guessing.\n\nFor best results, use the same resolution + Video/Audio VAEs throughout the chain.\n"
+        "### Self-describing saved clips\nEach clip stores its full AV latent, its **actual reused Masked-AV head length**, and Auto Handover metadata.\n\nManual Save / Load indexing remains intentional in v1.4: `clip_00001`, `clip_00002`, ... You can still overwrite a chosen slot to regenerate a branch.\n\nThe stitcher also understands legacy v1.3 head/handover metadata, so old saved chains remain usable where their required metadata is present."
       ],
       "color": "#3f3f3f",
       "bgcolor": "#575757"
@@ -226,7 +226,7 @@
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "### Safe Tail Bridge\nWhen H3's phase-aligned latent cutoff falls 1–3 frames before the detector's already-safe ideal end, those rendered pixels are still usable even though they cannot be passed as latent anchors.\n\nWith `max_safe_tail_bridge_frames = 2`, the stitcher keeps up to two of those exact frames from the previous clip and skips the same number of early **video** frames in the next clip. It never crosses the detector's safety boundary and never changes total duration.\n\nAfter that, a short **4-frame context-aligned video blend** smooths the pixel decode seam. Audio keeps the separately tested **15 ms de-click crossfade** and is not shifted by Safe Tail Bridge.\n\n`luminance_match` is kept only as an experimental fallback and is **off by default**."
+        "### Native Masked-AV seam alignment — v1.4\nThe previous visible **video** ends at the same safe AV-compatible boundary where the next clip's protected video context ends. That robust validated geometry is unchanged.\n\nv1.4 does **not** attempt to reclaim video frames lost only to the AV-grid snap because live testing showed visible motion/alignment errors when original and regenerated trajectories were rejoined later.\n\nAudio may extend independently beyond the video handover. Because that extra audio is stored inside the next full latent, removing the normal duplicate head leaves the valid carried dialogue tail in place automatically.\n\nSafe Tail Bridge defaults to 0 and luminance matching stays OFF; both remain Advanced legacy/diagnostic fallbacks."
       ],
       "title": "INFO — Safe Tail Bridge & seam smoothing",
       "color": "#3f3f3f",

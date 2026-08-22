@@ -1,43 +1,40 @@
-# v1.3.0 validation notes
+# v1.4.0 validation notes
 
-This file summarizes the release checks for **Herrgotts H3 Infinite Continuation Suite v1.3.0**.
+v1.4.0 moves continuation to ComfyUI's native MiniMax H3 Masked-AV path while preserving the suite's freeze/brightness-safe source selection. The released build uses one shared safe video boundary for rendering and continuation, defaults Continue duration to Net New Content, and can independently preserve useful audio beyond the visual handover.
 
-## Release scope
+## Intended behavior
 
-v1.3.0 extends the conditioning layer while deliberately keeping the proven continuation and stitching core stable.
+- require a current ComfyUI build containing native PR #15375 H3 AV-mask support;
+- detect and exclude the unusable FL2VA freeze / brightness landing from the protected **video** source;
+- snap the safe visual endpoint backward to the latest exact Masked-AV video boundary and use that same endpoint for Stitch Ready and the next protected video head;
+- default to 39 protected video frames;
+- default `Duration Mode` to **Net New Content**, so requested Continue duration approximates newly generated visible video after the protected head;
+- default `Audio Tail Carryover` to **Full Previous Tail**, allowing audio to remain protected beyond the visual handover through valid audio already present in the previous full latent;
+- keep `audio_feather_ticks = 0` for hard dialogue protection;
+- preserve `Match Video Handover` and `Total Generation` as direct A/B/legacy-semantics fallbacks;
+- keep Safe Tail Bridge and luminance matching Advanced/off for new native-mask chains;
+- retain older node registrations and saved-metadata compatibility so existing workflows remain loadable.
 
-Validated release behavior includes:
+## Geometry examples
 
-- `H3ContinuousStartV13` with independent optional First Frame and Last Frame inputs.
-- T2VA, I2VA, L2VA and FL2VA start modes from the same v1.3 Start node.
-- `H3ContinuousContinueV13` with the existing direct phase-aligned video/audio latent handover plus optional Last Frame conditioning.
-- Auto-growing Qwen-only reference inputs from `Qwen Reference 1` through `Qwen Reference 9`.
-- Deterministic Qwen `<Picture N>` ordering: connected First Frame, connected Last Frame, then connected Qwen References in numeric socket order.
-- Continue-mode picture mapping that does **not** count the carried direct latent context as a Qwen Picture.
-- `picture_map` diagnostics for the exact image-to-Picture assignment.
-- Existing v1.2.x Start/Continue classes retained for workflow compatibility.
-- Manual Save/Load clip indexing retained unchanged for v1.3.0.
+Default 39-frame protected video context:
 
-## Live validation carried into the release
+- 39 rendered frames (~1.625 s at 24 fps);
+- 12 H3 video-latent temporal steps;
+- 65 corresponding audio-latent ticks at 40 Hz.
 
-The v1.3 conditioning path was live-tested in ComfyUI with:
+Audio may be longer. Example for a 124-frame previous clip with safe video source frames 68..106:
 
-- Qwen Reference socket autogrow behavior.
-- First/Last Frame Picture ordering.
-- Multiple Qwen References used for separate prompt roles.
-- Longer multi-clip continuation through the v1.3 Continue node.
+- video protected source: frames 68..106 (39 frames);
+- matching audio prefix: ticks 113..177 (65 ticks);
+- `Full Previous Tail`: ticks 113..206 (94 ticks total), adding 29 protected ticks / 0.725 s of original audio beyond the visual handover.
 
-The underlying direct AV-latent continuation, freeze analysis, phase-aligned cutoff, Safe Tail Bridge and seamless stitching path remains the established v1.2.x implementation.
+Five-second duration example with 39-frame context:
 
-## ComfyUI 0.33 compatibility
+- `Net New Content`: 158 total frames -> 119 new frames (~4.96 s);
+- `Total Generation`: 124 total frames -> 85 new frames (~3.54 s).
 
-The v1.2.2 runtime compatibility work remains in place:
-
-- Native MiniMax H3 keyframe placement is used on the newer ComfyUI H3 layout API.
-- The legacy payload patch is skipped where ComfyUI preserves keyframes and reference payloads natively.
-- The remaining native audio-timeline compatibility wrapper is installed lazily and is gated to suite-marked continuation graphs.
-- Repeated Continue calls in one ComfyUI session retain the corrected wrapper/signature handling.
-- Older supported H3 layouts retain the legacy compatibility path.
+Net New Content is not a speed optimization; its longer target increases sampling work.
 
 ## Automated regression suite
 
@@ -48,31 +45,25 @@ python -m pip install -r requirements-dev.txt
 python -m pytest -q
 ```
 
-Release result for this source tree:
+Release result: **110 passed**.
 
-```text
-82 passed
-```
+Coverage includes existing freeze/motion, H3 geometry, Qwen, save/load and stitching regressions plus:
 
-The automated suite covers:
+- Net New Content and Total Generation frame planning;
+- independent full-tail vs video-matched audio context planning;
+- hard 39-frame / 65-tick baseline geometry;
+- v1.4 workflow defaults and Registry metadata;
+- absence of the rejected Alignment Recovery experiment from v1.4 public workflows/nodes;
+- Advanced/default-off status for legacy seam fallbacks.
 
-- latent continuation math and phase alignment;
-- freeze/motion handover analysis;
-- release metadata and saved latent helpers;
-- runtime patch gating and native/legacy API safety;
-- seamless stitch and Safe Tail Bridge behavior;
-- v1.3 Qwen dynamic-input collection and Picture mapping;
-- all four shipped v1.3 workflows and Registry metadata;
-- release documentation invariants, including the README section order.
+## Static / package checks
 
-## Additional release checks
+The release is checked for Python compilation, valid workflow JSON, graph-link consistency, consistent `1.4.0` Registry metadata, native mask capability guards, and clean install/source archives.
 
-Before packaging, the v1.3.0 source tree was also checked for:
+## Live validation status
 
-- Python compilation errors;
-- valid JSON in all shipped workflow files;
-- consistent `1.3.0` package/workflow Registry version metadata;
-- stale v1.3 release-candidate wording in the final release section;
-- local Markdown links to files shipped in the repository.
+The v1.4 video path has been live-tested successfully, including removal of the previously observed brightness mismatch. Independent audio-tail carryover has also been live-tested on a dialogue seam where speech extended beyond the safe visual handover, and the carried audio remained continuous.
 
-No model weights are included in the repository or release package.
+The release still retains conservative fallbacks and older node registrations for compatibility. Important limitation: audio-tail carryover can preserve only audio that already exists in the previous full latent. If the source clip itself ends mid-word, missing phonemes cannot be recovered from latent carryover.
+
+No model weights are included.

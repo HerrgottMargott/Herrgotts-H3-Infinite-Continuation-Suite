@@ -151,6 +151,10 @@ def test_robust_gate_rejects_sustained_residual_motion():
     assert r["freeze_detected"] is False
     assert r["no_lock_reason"] == "residual_motion_gate_failed"
     assert r["residual_gate_passed"] is False
+    # Candidate 4 keeps this weaker visual-final-state onset for safe-handover
+    # trimming even though it is intentionally rejected as a hard freeze.
+    assert r["primary_candidate_start_frame"] >= 0
+    assert r["primary_candidate_trailing_frames"] >= r["freeze_hold"]
 
 
 def stable_tail_with_last_frame_outlier(frames=243, lock_start=215):

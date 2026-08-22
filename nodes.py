@@ -16,14 +16,15 @@ import nodes
 
 from .latent_math import (
     FPS, AUDIO_HZ, FRAME_RESCALE, CONTEXT_TO_STEPS,
-    temporal_shape, pixel_frames, context_slice, phase_aware_context_slice, phase_aligned_extended_context_slice, audio_slice_for_pixel_window,
+    temporal_shape, pixel_frames, video_latent_t, context_slice, phase_aware_context_slice, phase_aligned_extended_context_slice,
+    masked_av_context_slice, audio_slice_for_pixel_window, masked_av_audio_context_plan,
 )
 from .patch_layout import HC_INDEX, HC_AUDIO_END_FRAME, LEGACY_LAYOUT_MODE, NATIVE_LAYOUT_MODE
 from .runtime_patches import ensure_h3_runtime_patches
 from .motion_analysis import analyze_freeze_tail, phase_aware_safety_from_confidence
 from .release_utils import (
-    duration_to_requested_frames, normalize_alignment_mode, normalize_safety_mode,
-    resolve_freeze_settings, stitch_trim_plan, apply_no_lock_fallback,
+    duration_to_requested_frames, masked_av_duration_plan, normalize_alignment_mode, normalize_safety_mode,
+    resolve_freeze_settings, stitch_trim_plan, apply_no_lock_fallback, masked_av_render_trim, masked_av_safe_handover_plan,
 )
 from .seamless_stitch import (
     LUMINANCE_ANALYSIS_FRAMES, context_aligned_video_join, context_aligned_audio_join,
@@ -40,6 +41,7 @@ from .qwen_guides import (
 _LOG = logging.getLogger("h3_continuous")
 CANVAS_MULTIPLE = 32
 REF_IMAGE_SHORT_EDGE = 2048
+RELEASE_VERSION = "1.4.0"
 
 
 def _resize(image, width, height, crop):
@@ -123,6 +125,210 @@ def _tokenize_v13_picture_presentation(clip, prompt, keyframe_images, qwen_refer
         # conditioning values such as minimax_refs.
         return clip.tokenize(prompt, images=pictures)
     return clip.tokenize(prompt)
+
+
+def _signature_has(fn, *names):
+    try:
+        import inspect
+        params = inspect.signature(fn).parameters
+    except (TypeError, ValueError):
+        return False
+    return all(name in params for name in names)
+
+
+def _function_code_names(fn):
+    """Collect code-level names/strings without depending on source files being present."""
+    import types
+
+    def walk(code):
+        if not isinstance(code, types.CodeType):
+            return
+        yield from code.co_names
+        for value in code.co_consts:
+            if isinstance(value, str):
+                yield value
+            elif isinstance(value, types.CodeType):
+                yield from walk(value)
+
+    return set(walk(getattr(fn, "__code__", None)) or ())
+
+
+def _native_masked_av_capability_status():
+    """Probe the live ComfyUI runtime for the native H3 AV-mask path from PR #15375.
+
+    Do not rely on the semantic version alone: early builds can share a version
+    number while differing in whether the merged H3 mask implementation is
+    present. v1.4 intentionally requires native support and installs no
+    runtime compatibility patch.
+    """
+    try:
+        import comfy.model_base as model_base
+        import comfy.ldm.minimax.model as h3m
+    except Exception as exc:
+        return {"available": False, "import_error": repr(exc)}
+
+    base_cls = getattr(model_base, "MiniMaxH3", None)
+    model_cls = getattr(h3m, "MiniMaxH3Model", None)
+    forward = getattr(model_cls, "forward", None) if model_cls is not None else None
+    inner = getattr(model_cls, "_forward", None) if model_cls is not None else None
+    scale = base_cls.__dict__.get("scale_latent_inpaint") if base_cls is not None else None
+    extra = getattr(base_cls, "extra_conds", None) if base_cls is not None else None
+    extra_names = _function_code_names(extra) if callable(extra) else set()
+
+    status = {
+        "minimax_h3_base": base_cls is not None,
+        "mask_row_values": callable(getattr(h3m, "mask_row_values", None)),
+        "forward_masks": callable(forward) and _signature_has(forward, "denoise_mask", "audio_denoise_mask"),
+        "inner_masks": callable(inner) and _signature_has(inner, "denoise_mask", "audio_denoise_mask"),
+        "token_grid_masks": callable(base_cls.__dict__.get("_token_grid_masks")) if base_cls is not None else False,
+        "denoise_mask_conds": callable(base_cls.__dict__.get("_denoise_mask_conds")) if base_cls is not None else False,
+        "native_inpaint_alignment": callable(scale) and _signature_has(scale, "x", "denoise_mask"),
+        "payload_extraction": bool(
+            callable(extra)
+            and "denoise_mask" in extra_names
+            and "_denoise_mask_conds" in extra_names
+        ),
+    }
+    status["available"] = all(status.values())
+    return status
+
+
+def _require_masked_av_support():
+    """Require a current ComfyUI build containing native MiniMax H3 PR #15375 support."""
+    try:
+        import comfyui_version
+        version_text = str(comfyui_version.__version__)
+    except Exception:
+        version_text = "unknown"
+
+    status = _native_masked_av_capability_status()
+    if not status.get("available"):
+        missing = [key for key, ok in status.items() if key not in {"available", "import_error"} and not ok]
+        detail = f" Missing capabilities: {', '.join(missing)}." if missing else ""
+        if status.get("import_error"):
+            detail += f" Import error: {status['import_error']}."
+        raise RuntimeError(
+            "h3_continuous: v1.4 Masked AV requires a current ComfyUI build containing "
+            f"native MiniMax H3 AV-mask support from PR #15375 (live version: {version_text})."
+            f"{detail} Update ComfyUI to the latest build and fully restart it before using "
+            "H3 Infinite - Continue from Latent v1.4."
+        )
+    return version_text
+
+
+def _apply_audio_context_feather(mask, audio_steps, feather_ticks):
+    """Optionally release the final protected audio ticks with a half-cosine mask ramp."""
+    audio_steps = int(audio_steps)
+    feather = max(0, min(int(feather_ticks), audio_steps))
+    hard = audio_steps - feather
+    if hard > 0:
+        mask[..., :hard] = 0.0
+    if feather > 0:
+        i = torch.arange(1, feather + 1, device=mask.device, dtype=mask.dtype)
+        ramp = 0.5 - 0.5 * torch.cos(torch.pi * i / float(feather))
+        shape = [1] * mask.ndim
+        shape[-1] = feather
+        mask[..., hard:audio_steps] = ramp.view(*shape)
+    return mask
+
+
+def _masked_av_latent(target_latent, previous_latent, source_slice,
+                      audio_tail_mode="Full Previous Tail", audio_feather_ticks=0):
+    """Copy safe video context plus independently-sized audio context into the target head.
+
+    v1.4 keeps the freeze-safe video handover unchanged,
+    while optionally protecting the original audio beyond the visual handover so
+    speech/phoneme endings do not have to be re-invented by the next sample.
+    """
+    target_video, target_audio = _streams_from_latent(target_latent)
+    source_video, source_audio = _streams_from_latent(previous_latent)
+    if int(target_video.shape[0]) != 1 or int(target_audio.shape[0]) != 1:
+        raise ValueError("h3_continuous: Masked AV currently supports target batch size 1")
+    if int(source_video.shape[0]) != 1 or int(source_audio.shape[0]) != 1:
+        raise ValueError("h3_continuous: Masked AV currently supports source batch size 1")
+    if tuple(source_video.shape[1:2] + source_video.shape[3:]) != tuple(
+        target_video.shape[1:2] + target_video.shape[3:]
+    ):
+        raise ValueError(
+            "h3_continuous: Masked AV requires identical source/target video latent geometry. "
+            f"Source {tuple(source_video.shape)}, target {tuple(target_video.shape)}."
+        )
+    if tuple(source_audio.shape[1:3]) != tuple(target_audio.shape[1:3]):
+        raise ValueError(
+            "h3_continuous: Masked AV source/target audio latent geometry differs: "
+            f"{tuple(source_audio.shape)} vs {tuple(target_audio.shape)}"
+        )
+
+    video_steps = int(source_slice["context_steps"])
+    if video_steps >= int(target_video.shape[2]):
+        raise ValueError("h3_continuous: Masked AV context consumes the whole target video latent")
+    source_video_run = source_video[:1, :, source_slice["start_t"]:source_slice["end_t"]]
+    if int(source_video_run.shape[2]) != video_steps:
+        raise RuntimeError("h3_continuous: Masked AV video source slice length mismatch")
+
+    audio_plan = masked_av_audio_context_plan(
+        source_audio.shape[-1],
+        source_slice["source_start_frame"],
+        source_slice["source_end_frame"],
+        source_slice["previous_frame_count"],
+        audio_tail_mode,
+    )
+    a0 = int(audio_plan["start_tick"])
+    a1 = int(audio_plan["end_tick"])
+    audio_steps = int(audio_plan["audio_steps"])
+    expected_video_audio_steps = int(round(source_slice["actual_context_frames"] * AUDIO_HZ / FPS))
+    if int(audio_plan["video_context_audio_steps"]) != expected_video_audio_steps:
+        raise RuntimeError(
+            "h3_continuous: Masked AV video-context audio geometry is inconsistent: "
+            f"{audio_plan['video_context_audio_steps']} ticks, expected {expected_video_audio_steps}"
+        )
+    if audio_steps >= int(target_audio.shape[-1]):
+        raise ValueError(
+            "h3_continuous: protected audio tail would consume the whole target audio latent. "
+            "Increase Duration / use Net New Content, or set Audio Tail Carryover to Match Video Handover."
+        )
+
+    out_video = target_video.clone()
+    out_audio = target_audio.clone()
+    out_video[:, :, :video_steps] = source_video_run.to(
+        device=out_video.device, dtype=out_video.dtype
+    )
+    out_audio[..., :audio_steps] = source_audio[:1, ..., a0:a1].to(
+        device=out_audio.device, dtype=out_audio.dtype
+    )
+
+    video_mask = torch.ones(
+        (1, 1, int(out_video.shape[2]), int(out_video.shape[3]), int(out_video.shape[4])),
+        device=out_video.device, dtype=torch.float32,
+    )
+    audio_mask = torch.ones(
+        (1, 1, int(out_audio.shape[2]), int(out_audio.shape[3])),
+        device=out_audio.device, dtype=torch.float32,
+    )
+    video_mask[:, :, :video_steps] = 0.0
+    _apply_audio_context_feather(audio_mask, audio_steps, audio_feather_ticks)
+
+    out = dict(target_latent)
+    out["samples"] = comfy.nested_tensor.NestedTensor((out_video, out_audio))
+    out["noise_mask"] = comfy.nested_tensor.NestedTensor((video_mask, audio_mask))
+    return out, a0, a1, audio_steps, audio_plan
+
+
+def _context_tail_offset_from_handover(handover, head_context_frames):
+    """Map legacy v1.4 true-final-tail seams into the reused context head.
+
+    Current v1.4 uses ``safe_handover_window``: the protected Masked-AV source
+    ends at exactly the same AV-compatible boundary that Stitch Ready keeps in
+    the previous clip, so its offset is zero. The nonzero mapping is retained
+    only so early v1.4 / saved experimental chains remain stitchable.
+    """
+    head = max(0, int(head_context_frames or 0))
+    if head <= 0 or not isinstance(handover, dict):
+        return 0
+    if str(handover.get("masked_av_source_policy", "")) != "true_final_tail":
+        return 0
+    tail = max(0, int(handover.get("landing_tail_frames", 0) or 0))
+    return min(head, tail)
 
 
 def _require_patches():
@@ -547,7 +753,7 @@ class H3ContinuousSaveLatent:
         head_context_frames = max(0, int(head_context_frames or 0))
         metadata = {
             "format": "h3_continuous_av_v8",
-            "release_version": "1.3.0",
+            "release_version": RELEASE_VERSION,
             "fps": str(FPS),
             "frame_count": str(frame_count),
             "clip_index": str(int(clip_index)),
@@ -1266,6 +1472,159 @@ class H3ContinuousContinueV13(H3ContinuousContinueV1):
         return (*result, picture_map)
 
 
+class H3ContinuousStartV14(H3ContinuousStartV13):
+    CATEGORY = "Herrgotts H3 Infinite Continuation Suite"
+    DESCRIPTION = (
+        "v1.4 Clip 1 start/conditioning. Behavior matches v1.3: optional First/Last Frames, "
+        "T2VA/I2VA/L2VA/FL2VA, auto-growing Qwen References and Picture Map. "
+        "Masked AV is used only by v1.4 continuation clips."
+    )
+
+
+class H3ContinuousContinueV14(H3ContinuousContinueV13):
+    @classmethod
+    def INPUT_TYPES(cls):
+        base = H3ContinuousContinueV13.INPUT_TYPES()
+        old = dict(base["required"])
+        old_optional = base.get("optional", {})
+        required = {
+            "clip": old["clip"],
+            "vae": old["vae"],
+            "previous_latent": old["previous_latent"],
+            "prompt": old["prompt"],
+            "width": old["width"],
+            "height": old["height"],
+            "duration": ("FLOAT", {
+                "default": 10.0, "min": 2.0, "max": 150.0, "step": 0.1,
+                "tooltip": "Duration interpreted by Duration Mode. Net New Content (recommended) targets this much visible newly-generated body after the 39f video head is removed; Total Generation keeps the legacy whole-clip meaning. Net New Content therefore samples a longer total latent and takes correspondingly longer.",
+            }),
+            "masked_context_frames": (["39", "90", "141", "192"], {
+                "default": "39",
+                "tooltip": "Protected previous VIDEO context ending at the freeze-safe Auto Handover boundary. Exact joint H3 video boundaries are 39/90/141/192/... frames. 39 (~1.625s) is recommended.",
+            }),
+            "audio_feather_ticks": ("INT", {
+                "default": 0, "min": 0, "max": 256, "step": 1, "advanced": True,
+                "tooltip": "Experimental/legacy control. Keep 0 for hard audio protection, especially for speech. Nonzero values let the final protected audio ticks be partially denoised and can weaken phoneme continuity.",
+            }),
+            "ref_image_size": old["ref_image_size"],
+            # Appended after the original v1.4 widget order so older v1.4 workflow
+            # JSON keeps its existing positional widget values.
+            "duration_mode": (["Net New Content", "Total Generation"], {
+                "default": "Net New Content",
+                "tooltip": "Recommended: Net New Content. Chooses the nearest legal H3 17k+5 total so the visible new video body stays close to Duration. Total Generation preserves the original whole-clip duration behavior.",
+            }),
+            "audio_tail_carryover": (["Full Previous Tail", "Match Video Handover"], {
+                "default": "Full Previous Tail",
+                "tooltip": "Recommended for dialogue: keep the freeze-safe 39f video handover, but protect original audio from the same context start through the previous clip's actual end. This lets valid word/phoneme endings survive even when the video must cut earlier. Match Video Handover reproduces the video-matched audio behavior.",
+            }),
+        }
+        optional = DynamicQwenReferenceInputs(
+            {
+                "handover": ("H3_CONTINUOUS_HANDOVER", {
+                    "tooltip": "Required safe-handover metadata for the previous clip. Connect Load AV Latent -> handover, or the previous clip's v1.4 Auto Handover directly. The protected video window ends BEFORE the unusable freeze/brightness tail.",
+                }),
+                "last_frame": old_optional["last_frame"],
+                "qwen_reference_1": old_optional["qwen_reference_1"],
+            },
+            tooltip=_QWEN_REFERENCE_TOOLTIP,
+        )
+        return {"required": required, "optional": optional}
+
+    RETURN_TYPES = H3ContinuousContinueV13.RETURN_TYPES
+    RETURN_NAMES = H3ContinuousContinueV13.RETURN_NAMES
+    CATEGORY = "Herrgotts H3 Infinite Continuation Suite"
+    DESCRIPTION = (
+        "v1.4 native Masked AV continuation with freeze/brightness-safe video handover. "
+        "Net New Content is the new duration default, and audio can independently remain protected through the previous clip's "
+        "full remaining tail so dialogue endings do not need to be regenerated at the visual seam."
+    )
+
+    def build(self, clip, vae, previous_latent, prompt, width, height, duration,
+              masked_context_frames="39", audio_feather_ticks=0, ref_image_size="match",
+              duration_mode="Net New Content", audio_tail_carryover="Full Previous Tail",
+              handover=None, last_frame=None, qwen_reference_1=None, **kwargs):
+        qwen_entries = collect_qwen_reference_entries(qwen_reference_1, kwargs)
+        qwen_references = [image for _, image in qwen_entries]
+        qwen_indices = [index for index, _ in qwen_entries]
+        picture_map = format_picture_map(
+            first_frame=False,
+            last_frame=last_frame is not None,
+            qwen_reference_count=len(qwen_references),
+            continuation=True,
+            qwen_reference_indices=qwen_indices,
+        )
+
+        context_request = int(masked_context_frames)
+        duration_plan = masked_av_duration_plan(duration, context_request, duration_mode)
+        frame_count = int(duration_plan["total_frame_count"])
+        comfy_version = _require_masked_av_support()
+        prev_video, _ = _streams_from_latent(previous_latent)
+        previous_frame_count = pixel_frames(prev_video.shape[2])
+
+        if not isinstance(handover, dict) or not handover.get("available"):
+            raise ValueError(
+                "v1.4 Continue requires H3_CONTINUOUS_HANDOVER metadata for the previous clip. "
+                "Connect the handover output from Load AV Latent or the previous v1.4 Auto Handover node."
+            )
+        meta_frames = int(handover.get("frame_count", previous_frame_count))
+        if meta_frames != previous_frame_count:
+            raise ValueError(
+                f"previous handover frame_count {meta_frames} != previous latent frame_count {previous_frame_count}"
+            )
+        safe_end = int(handover.get("handover_end_frame", -1))
+        if safe_end < 0 or safe_end >= previous_frame_count:
+            raise ValueError(f"invalid previous safe handover endpoint {safe_end} for {previous_frame_count} frames")
+        if safe_end < 38:
+            raise ValueError(
+                f"safe handover frame {safe_end} is too early for the minimum 39-frame Masked-AV context"
+            )
+
+        # The freeze-safe video boundary remains the source of truth: never carry the unusable
+        # FL2VA freeze/brightness tail into the next protected VIDEO context.
+        sl = masked_av_context_slice(
+            prev_video.shape[2], context_request, frame_count,
+            ideal_last_frame=safe_end,
+        )
+        actual_source_end = int(sl["source_end_frame"] - 1)
+        if actual_source_end != safe_end:
+            raise ValueError(
+                "previous handover is not aligned to the selected Masked-AV context. "
+                f"Metadata keeps frame {safe_end}, but {context_request}f context would end at {actual_source_end}. "
+                "Re-run the clip with v1.4 Auto Handover (or use the default 39f context)."
+            )
+
+        # Keep v1.3's flexible FL2VA/Qwen presentation unchanged. The protected
+        # prefix itself is not a Picture; it lives directly in the target latent.
+        cond, target_latent = H3ContinuousStart.build(
+            self, clip, vae, prompt, width, height, frame_count,
+            None, last_frame, ref_image_size=ref_image_size,
+            reference_image=None, qwen_references=qwen_references,
+        )
+        target_latent, a0, a1, audio_steps, audio_plan = _masked_av_latent(
+            target_latent, previous_latent, sl,
+            audio_tail_mode=audio_tail_carryover, audio_feather_ticks=audio_feather_ticks,
+        )
+
+        actual_context_frames = int(sl["actual_context_frames"])
+        ignored_tail = int(sl["ignored_tail_frames"])
+        extra_audio_ticks = int(audio_plan["extra_tail_ticks"])
+        info = (
+            f"continuation=native_masked_av_safe_handover_audio_tail | ComfyUI {comfy_version} | "
+            f"safe VIDEO source {sl['source_start_frame']}..{sl['source_end_frame'] - 1} "
+            f"of {sl['previous_frame_count']} (excluded unusable video tail {ignored_tail}f) | "
+            f"video latent {sl['start_t']}:{sl['end_t']} "
+            f"({sl['context_steps']} steps / {actual_context_frames} protected frames; requested {context_request}) | "
+            f"AUDIO policy={audio_plan['mode']} source frames {audio_plan['source_start_frame']}..{audio_plan['audio_source_end_frame'] - 1} "
+            f"-> latent {a0}:{a1} ({audio_steps} ticks; +{extra_audio_ticks} ticks/{audio_plan['extra_tail_seconds']:.3f}s beyond visual handover; "
+            f"feather {max(0, min(int(audio_feather_ticks), audio_steps))}) | "
+            f"duration={duration_plan['duration_mode']} -> total {frame_count}f/{duration_plan['total_seconds']:.3f}s, "
+            f"new VIDEO body {frame_count - actual_context_frames}f/{(frame_count - actual_context_frames) / FPS:.3f}s | "
+            f"video remains freeze/brightness-safe; audio may continue independently through valid original tail"
+        )
+        _LOG.info("h3_continuous: %s", info)
+        return (cond, target_latent, actual_context_frames, ignored_tail, info, picture_map)
+
+
 # ---------------------------------------------------------------------------
 # v1.2 release-facing nodes
 # ---------------------------------------------------------------------------
@@ -1454,6 +1813,134 @@ class H3ContinuousAnalyzeHandoverV11(H3ContinuousAnalyzeHandoverV1):
         )
 
 
+class H3ContinuousAnalyzeHandoverV14(H3ContinuousAnalyzeHandoverV11):
+    @classmethod
+    def INPUT_TYPES(cls):
+        base = H3ContinuousAnalyzeHandoverV11.INPUT_TYPES()
+        required = dict(base["required"])
+        if "context_frames" in required:
+            required["context_frames"] = (["39"], {
+                "default": "39",
+                "tooltip": "v1.4 keeps the validated video geometry: the detector snaps its safe visual cutoff backward to the minimum exact 39-frame Masked-AV boundary. Audio tail carryover is independent and does not change this video handover.",
+                "advanced": True,
+            })
+        return {"required": required}
+
+    CATEGORY = "Herrgotts H3 Infinite Continuation Suite"
+    DESCRIPTION = (
+        "v1.4 freeze-safe Masked AV video handover. The detector excludes the FL2VA freeze / unstable landing tail, "
+        "then snaps that visual cutoff backward to the latest exact Masked-AV video boundary. Stitch Ready and the next protected "
+        "video head share that boundary; audio tail carryover can independently extend beyond it."
+    )
+
+    def analyze(self, images, preset="Balanced", analysis_window=72, freeze_hold=8, safety_margin=3,
+                context_frames="39", analysis_size=192,
+                final_mean_diff_threshold=0.0120,
+                final_active_pixel_threshold=0.025,
+                max_final_active_area_percent=3.0,
+                transition_mean_diff_threshold=0.0020,
+                transition_active_pixel_threshold=0.010,
+                max_transition_active_area_percent=1.0,
+                min_static_transition_percent=70.0,
+                max_consecutive_motion_outliers=2,
+                final_reference_frames=15,
+                min_final_match_percent=75.0,
+                max_consecutive_final_outliers=3,
+                safety_mode="fixed"):
+        base = H3ContinuousAnalyzeHandoverV11.analyze(
+            self, images, preset=preset, analysis_window=analysis_window,
+            freeze_hold=freeze_hold, safety_margin=safety_margin, context_frames="39",
+            analysis_size=analysis_size,
+            final_mean_diff_threshold=final_mean_diff_threshold,
+            final_active_pixel_threshold=final_active_pixel_threshold,
+            max_final_active_area_percent=max_final_active_area_percent,
+            transition_mean_diff_threshold=transition_mean_diff_threshold,
+            transition_active_pixel_threshold=transition_active_pixel_threshold,
+            max_transition_active_area_percent=max_transition_active_area_percent,
+            min_static_transition_percent=min_static_transition_percent,
+            max_consecutive_motion_outliers=max_consecutive_motion_outliers,
+            final_reference_frames=final_reference_frames,
+            min_final_match_percent=min_final_match_percent,
+            max_consecutive_final_outliers=max_consecutive_final_outliers,
+            safety_mode=safety_mode,
+        )
+        result = dict(base[0])
+        frame_count = int(result["frame_count"])
+
+        # Preserve the old guide geometry only as diagnostics / A-B reference.
+        result["guide_handover_end_frame"] = int(result.get("handover_end_frame", frame_count - 1))
+        result["guide_landing_tail_frames"] = int(result.get("landing_tail_frames", 0))
+        result["guide_phase_aligned_cutoff_loss_frames"] = int(
+            result.get("phase_aligned_cutoff_loss_frames", 0)
+        )
+        result["guide_no_lock_fallback_applied"] = bool(result.get("no_lock_fallback_applied", False))
+
+        render_trim = masked_av_render_trim(
+            frame_count,
+            freeze_detected=bool(result.get("freeze_detected")),
+            ideal_handover_end_frame=result.get("ideal_handover_end_frame"),
+            freeze_hold=int(result.get("freeze_hold", freeze_hold)),
+            safety_margin=int(result.get("safety_margin", safety_margin)),
+            soft_final_candidate_start_frame=result.get("primary_candidate_start_frame", -1),
+        )
+        # One source of truth: snap the detector's desired safe pixel
+        # endpoint to the latest exact AV-compatible latent boundary, then use THAT
+        # endpoint for both visible Stitch Ready output and the next protected head.
+        safe_plan = masked_av_safe_handover_plan(frame_count, render_trim, 39)
+        desired_end = int(safe_plan["desired_handover_end_frame"])
+        actual_end = int(safe_plan["handover_end_frame"])
+        tail = int(safe_plan["landing_tail_frames"])
+        av_cutoff_loss = int(safe_plan["masked_av_cutoff_loss_frames"])
+        sl = dict(safe_plan["masked_av_slice"])
+
+        if render_trim["render_safety_applied"]:
+            result["no_lock_fallback_applied"] = True
+            result["no_lock_fallback_reason"] = f"masked_av_safe_handover_{render_trim.get('render_safety_mode', 'fallback')}"
+            result["no_lock_fallback_requested_excluded_frames"] = int(render_trim["render_safety_frames"])
+        else:
+            result["no_lock_fallback_applied"] = False
+            result["no_lock_fallback_reason"] = "masked_av_safe_handover_detector_trim"
+
+        result.update({
+            "masked_av_source_policy": "safe_handover_window",
+            "masked_av_detector_desired_end_frame": int(desired_end),
+            "masked_av_source_start_frame": int(sl["source_start_frame"]),
+            "masked_av_source_end_frame": int(sl["source_end_frame"]),
+            "masked_av_context_frames": int(sl["actual_context_frames"]),
+            "masked_av_cutoff_loss_frames": int(av_cutoff_loss),
+            "masked_av_stitch_policy": str(render_trim["policy"]),
+            "masked_av_render_safety_applied": bool(render_trim["render_safety_applied"]),
+            "masked_av_render_safety_frames": int(render_trim["render_safety_frames"]),
+            "masked_av_render_safety_mode": str(render_trim.get("render_safety_mode", "")),
+            "masked_av_soft_final_candidate_used": bool(render_trim.get("soft_final_candidate_used", False)),
+            # Compatibility keys consumed by Output / Saved Chain stitchers.
+            # These now describe the exact same endpoint as the protected source.
+            "handover_end_frame": int(actual_end),
+            "landing_tail_frames": int(tail),
+            # Safe Tail Bridge remains disabled for native Masked AV. The small
+            # AV-snap loss is intentional: both sides meet at actual_end.
+            "phase_aligned_cutoff_loss_frames": 0,
+            "phase_aligned_context_extension_frames": 0,
+            "release_version": RELEASE_VERSION,
+            "version": max(int(result.get("version", 0)), 12),
+        })
+
+        label = str(base[1]).split(" | ", 1)[0]
+        status = (
+            f"{label} | NATIVE MASKED AV SAFE HANDOVER | {render_trim['policy']} | "
+            f"detector desired end {desired_end} -> AV-aligned end {actual_end} "
+            f"(alignment loss {av_cutoff_loss}f) | visible tail trim {tail}f | "
+            f"protected source {sl['source_start_frame']}..{sl['source_end_frame'] - 1} "
+            f"({sl['actual_context_frames']}f) | legacy-guide end {result['guide_handover_end_frame']}"
+        )
+        _LOG.info("h3_continuous: %s", status)
+        return (
+            result, status, bool(result["freeze_detected"]), int(result["freeze_start_frame"]),
+            int(result["ideal_handover_end_frame"]), int(result["handover_end_frame"]),
+            int(result["landing_tail_frames"]), float(result["confidence"]),
+        )
+
+
 class H3ContinuousStitchOutputV11(H3ContinuousStitchOutputV1):
     @classmethod
     def INPUT_TYPES(cls):
@@ -1564,9 +2051,11 @@ class H3ContinuousSeamlessJoinV11:
             bridge_images = bridge_images.to(previous_images.device, previous_images.dtype)
             previous_video = torch.cat((previous_images, bridge_images), dim=0)
         video_head = audio_head + bridge
+        context_tail_offset = _context_tail_offset_from_handover(previous_handover, audio_head)
 
         out_images, vstats = context_aligned_video_join(
             previous_video, next_images, video_head, tail, int(video_crossfade_frames),
+            context_tail_offset_frames=context_tail_offset,
             luminance_match=bool(luminance_match),
             luminance_fade_frames=int(luminance_fade_frames),
             max_luminance_correction_percent=float(max_luminance_correction_percent),
@@ -1579,6 +2068,7 @@ class H3ContinuousSeamlessJoinV11:
             next_tail_trim_frames=tail,
             crossfade_ms=float(audio_crossfade_ms),
             fps=FPS,
+            context_tail_offset_frames=context_tail_offset,
         )
         # Bridge adds N previous pixels and removes N next pixels, so the video
         # timeline must still equal the audio/hard-stitch timeline exactly.
@@ -1602,7 +2092,7 @@ class H3ContinuousSeamlessJoinV11:
             bridge_text += f"/{available}f available"
         info = (
             f"context-aligned join | previous {previous_frames} frames | next source {next_total} frames | "
-            f"next audio head {audio_head} | video head {video_head} | safe tail bridge {bridge_text} | "
+            f"next audio head {audio_head} | video head {video_head} | context-tail offset {context_tail_offset} | safe tail bridge {bridge_text} | "
             f"next tail {tail} | video crossfade {vstats['video_crossfade_frames']} frame(s) | "
             f"boundary luminance {luma_text} | audio crossfade {astats.get('audio_crossfade_samples', 0)} samples "
             f"(~{astats.get('audio_crossfade_ms_effective', 0)} ms) | output {int(out_images.shape[0])} frames"
@@ -1876,7 +2366,7 @@ class H3ContinuousStitchSavedChainV11:
                         raise ValueError(f"Saved Chain Stitch currently supports mono/stereo audio, got {channels} channels")
                     layout = "mono" if channels == 1 else "stereo"
                     output = av.open(out_path, mode="w", options={"movflags": "use_metadata_tags+faststart"})
-                    output.metadata["herrgotts_h3_infinite_version"] = "1.3.0"
+                    output.metadata["herrgotts_h3_infinite_version"] = RELEASE_VERSION
                     output.metadata["clip_range"] = f"{first}-{last}"
                     output.metadata["video_crossfade_frames"] = str(requested_vfade)
                     output.metadata["audio_crossfade_ms"] = str(requested_afade_ms)
@@ -1907,6 +2397,8 @@ class H3ContinuousStitchSavedChainV11:
                 # here. Audio keeps its already-tested boundary unchanged.
                 incoming_bridge = min(incoming_bridge, max(0, end - head - 1))
                 video_head = head + incoming_bridge
+                context_tail_offset = _context_tail_offset_from_handover(previous_handover, head)
+                overlap_end = max(0, video_head - context_tail_offset)
                 body_images = images[video_head:end]
                 body_audio = frame_trimmed_audio(audio, frame_count, head, tail, FPS)["waveform"]
 
@@ -1971,12 +2463,12 @@ class H3ContinuousStitchSavedChainV11:
                     luma_clamped = False
                     luma_faded = 0
                     luma_analysis = 0
-                    if requested_luma_match and previous_boundary is not None and video_head > 0:
-                        luma_analysis = min(LUMINANCE_ANALYSIS_FRAMES, video_head, int(previous_boundary.shape[0]))
+                    if requested_luma_match and previous_boundary is not None and overlap_end > 0:
+                        luma_analysis = min(LUMINANCE_ANALYSIS_FRAMES, overlap_end, int(previous_boundary.shape[0]))
                         if luma_analysis > 0:
                             lstats = estimate_luminance_gain(
                                 previous_boundary[-luma_analysis:],
-                                images[video_head - luma_analysis:video_head].detach().cpu().to(previous_boundary.dtype),
+                                images[overlap_end - luma_analysis:overlap_end].detach().cpu().to(previous_boundary.dtype),
                                 max_correction_percent=requested_luma_max_percent,
                             )
                             luma_gain = float(lstats["luminance_applied_gain"])
@@ -1986,26 +2478,28 @@ class H3ContinuousStitchSavedChainV11:
                                 body_images, luma_gain, requested_luma_fade, inplace=True
                             )
 
-                    vn = min(requested_vfade, video_head, int(previous_boundary.shape[0]) if previous_boundary is not None else 0)
+                    vn = min(requested_vfade, overlap_end, int(previous_boundary.shape[0]) if previous_boundary is not None else 0)
                     if previous_boundary is not None:
                         if int(previous_boundary.shape[0]) > vn:
                             write_video(previous_boundary[:-vn] if vn else previous_boundary)
                         if vn:
                             prev_tail = previous_boundary[-vn:]
-                            next_overlap = images[video_head - vn:video_head].detach().cpu().to(prev_tail.dtype)
+                            next_overlap = images[overlap_end - vn:overlap_end].detach().cpu().to(prev_tail.dtype)
                             if requested_luma_match:
                                 next_overlap = apply_rgb_gain(next_overlap, luma_gain)
                             write_video(blend_video_overlap(prev_tail, next_overlap))
 
                     head_samples = int(round(head / float(FPS) * sr))
+                    context_offset_samples = int(round(context_tail_offset / float(FPS) * sr))
+                    overlap_end_samples = max(0, head_samples - context_offset_samples)
                     an_req = int(round(requested_afade_ms / 1000.0 * sr))
-                    an = min(an_req, head_samples, int(pending_audio.shape[-1]) if pending_audio is not None else 0)
+                    an = min(an_req, overlap_end_samples, int(pending_audio.shape[-1]) if pending_audio is not None else 0)
                     if pending_audio is not None:
                         if int(pending_audio.shape[-1]) > an:
                             write_audio(pending_audio[..., :-an] if an else pending_audio)
                         if an:
                             prev_tail_a = pending_audio[..., -an:]
-                            next_overlap_a = wave[..., head_samples - an:head_samples].detach().cpu().to(prev_tail_a.dtype)
+                            next_overlap_a = wave[..., overlap_end_samples - an:overlap_end_samples].detach().cpu().to(prev_tail_a.dtype)
                             write_audio(blend_audio_overlap(prev_tail_a, next_overlap_a))
 
                     if not is_final:
@@ -2034,7 +2528,7 @@ class H3ContinuousStitchSavedChainV11:
                         f"clamped={'yes' if luma_clamped else 'no'})"
                     )
                 clip_summaries.append(
-                    f"clip {clip_index}: audio-head {head} ({head_source}), video-head {video_head}, tail {tail}, "
+                    f"clip {clip_index}: audio-head {head} ({head_source}), video-head {video_head}, context-tail-offset {context_tail_offset}, tail {tail}, "
                     f"bridge-in {incoming_bridge}f, bridge-out {future_bridge_count}f, "
                     f"join {effective_vfade}f/{round(effective_afade / sr * 1000.0, 1) if sr else 0}ms, "
                     f"luma {luma_summary}"
@@ -2087,13 +2581,91 @@ class H3ContinuousStitchSavedChainV11:
         _LOG.info("h3_continuous: %s", info)
         return (out_path, info)
 
+class H3ContinuousStitchOutputV14(H3ContinuousStitchOutputV11):
+    CATEGORY = "Herrgotts H3 Infinite Continuation Suite"
+    DESCRIPTION = (
+        "v1.4 output helper. Stitch Ready keeps the exact freeze/brightness-safe video handover; "
+        "the reused native-mask video head is removed by actual_head_context_frames. Extended protected audio tail remains "
+        "available on the next clip after that normal head trim."
+    )
+
+
+class H3ContinuousSeamlessJoinV14(H3ContinuousSeamlessJoinV11):
+    @classmethod
+    def INPUT_TYPES(cls):
+        base = H3ContinuousSeamlessJoinV11.INPUT_TYPES()
+        required = dict(base["required"])
+        required["luminance_match"] = ("BOOLEAN", {
+            "default": False, "advanced": True,
+            "tooltip": "Legacy/diagnostic fallback only. Native Masked AV solved the observed brightness seam in live testing; keep this OFF unless deliberately A/B testing an older seam.",
+        })
+        required["luminance_fade_frames"] = ("INT", {
+            "default": 16, "min": 0, "max": 96, "step": 1, "advanced": True,
+            "tooltip": "Advanced legacy luminance-fade length. Ignored while Luminance Match is off.",
+        })
+        required["max_luminance_correction_percent"] = ("FLOAT", {
+            "default": 10.0, "min": 0.0, "max": 25.0, "step": 0.5, "advanced": True,
+            "tooltip": "Advanced legacy luminance correction clamp. Ignored while Luminance Match is off.",
+        })
+        required["max_safe_tail_bridge_frames"] = ("INT", {
+            "default": 0, "min": 0, "max": 4, "step": 1,
+            "tooltip": "Legacy-guide A/B compatibility only. Keep 0 for v1.4 Native Masked AV; the release intentionally accepts the AV-grid snap instead of bridging mismatched motion.",
+            "advanced": True,
+        })
+        return {"required": required, "optional": dict(base.get("optional", {}))}
+
+    CATEGORY = "Herrgotts H3 Infinite Continuation Suite"
+    DESCRIPTION = (
+        "v1.4 rendered AV join. It keeps the validated shared video seam unchanged; "
+        "independent protected audio-tail continuation is already present in the decoded next clip and is preserved automatically after the 39f video head trim."
+    )
+
+
+class H3ContinuousStitchSavedChainV14(H3ContinuousStitchSavedChainV11):
+    @classmethod
+    def INPUT_TYPES(cls):
+        base = H3ContinuousStitchSavedChainV11.INPUT_TYPES()
+        required = dict(base["required"])
+        required["luminance_match"] = ("BOOLEAN", {
+            "default": False, "advanced": True,
+            "tooltip": "Legacy/diagnostic fallback only. Keep OFF for v1.4 Native Masked AV unless deliberately testing an older brightness seam.",
+        })
+        required["luminance_fade_frames"] = ("INT", {
+            "default": 16, "min": 0, "max": 96, "step": 1, "advanced": True,
+            "tooltip": "Advanced legacy luminance-fade length. Ignored while Luminance Match is off.",
+        })
+        required["max_luminance_correction_percent"] = ("FLOAT", {
+            "default": 10.0, "min": 0.0, "max": 25.0, "step": 0.5, "advanced": True,
+            "tooltip": "Advanced legacy luminance correction clamp. Ignored while Luminance Match is off.",
+        })
+        required["max_safe_tail_bridge_frames"] = ("INT", {
+            "default": 0, "min": 0, "max": 4, "step": 1,
+            "tooltip": "Legacy saved-chain compatibility only. Keep 0 for v1.4; Native Masked AV intentionally uses the exact shared video handover boundary.",
+            "advanced": True,
+        })
+        return {"required": required}
+
+    CATEGORY = "Herrgotts H3 Infinite Continuation Suite"
+    DESCRIPTION = (
+        "v1.4 memory-bounded saved-chain stitcher. Shared video-boundary semantics remain unchanged; "
+        "Extended audio-tail protection survives naturally after the normal video-head trim. Older saved chains remain supported."
+    )
+
+
 # Shared release nodes live with the v1.2 suite in the Add Node menu.
 H3ContinuousSaveLatent.CATEGORY = "Herrgotts H3 Infinite Continuation Suite"
 H3ContinuousLoadLatent.CATEGORY = "Herrgotts H3 Infinite Continuation Suite"
 H3ContinuousLatentInfo.CATEGORY = "Herrgotts H3 Infinite Continuation Suite"
 
 NODE_CLASS_MAPPINGS = {
-    # v1.3 flexible conditioning nodes
+    # v1.4 native Masked AV nodes (current ComfyUI with PR #15375)
+    "H3ContinuousStartV14": H3ContinuousStartV14,
+    "H3ContinuousContinueV14": H3ContinuousContinueV14,
+    "H3ContinuousAnalyzeHandoverV14": H3ContinuousAnalyzeHandoverV14,
+    "H3ContinuousStitchOutputV14": H3ContinuousStitchOutputV14,
+    "H3ContinuousSeamlessJoinV14": H3ContinuousSeamlessJoinV14,
+    "H3ContinuousStitchSavedChainV14": H3ContinuousStitchSavedChainV14,
+    # v1.3 flexible conditioning / Legacy Guide A-B nodes
     "H3ContinuousStartV13": H3ContinuousStartV13,
     "H3ContinuousContinueV13": H3ContinuousContinueV13,
     # v1.2 release-facing nodes
@@ -2120,6 +2692,12 @@ NODE_CLASS_MAPPINGS = {
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
+    "H3ContinuousStartV14": "H3 Infinite - Flexible Start / Conditioning v1.4",
+    "H3ContinuousContinueV14": "H3 Infinite - Continue — Native Masked AV v1.4",
+    "H3ContinuousAnalyzeHandoverV14": "H3 Infinite - Auto Handover — Masked AV v1.4",
+    "H3ContinuousStitchOutputV14": "H3 Infinite - Output / Stitch — Masked AV v1.4",
+    "H3ContinuousSeamlessJoinV14": "H3 Infinite - Seamless AV Join — Masked AV v1.4",
+    "H3ContinuousStitchSavedChainV14": "H3 Infinite - Stitch Saved Chain — Masked AV v1.4",
     "H3ContinuousStartV13": "H3 Infinite - Flexible Start / Conditioning v1.3",
     "H3ContinuousContinueV13": "H3 Infinite - Continue from Latent v1.3",
     "H3ContinuousStartV11": "H3 Infinite - Start FFLF v1.2",

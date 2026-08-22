@@ -2,7 +2,7 @@
   "id": "5538995a-2314-4d0d-a862-c1e63b2b5bf1",
   "revision": 1,
   "last_node_id": 32,
-  "last_link_id": 34,
+  "last_link_id": 35,
   "nodes": [
     {
       "id": 1,
@@ -181,7 +181,7 @@
           "name": "handover",
           "type": "H3_CONTINUOUS_HANDOVER",
           "links": [
-            27
+            35
           ]
         }
       ],
@@ -189,7 +189,7 @@
       "properties": {
         "Node name for S&R": "H3ContinuousLoadLatent",
         "cnr_id": "herrgotts-h3-infinite-continuation-suite",
-        "ver": "1.3.0"
+        "ver": "1.4.0"
       },
       "widgets_values": [
         "h3_continuous",
@@ -278,7 +278,7 @@
     },
     {
       "id": 8,
-      "type": "H3ContinuousContinueV13",
+      "type": "H3ContinuousContinueV14",
       "pos": [
         -220,
         385
@@ -308,9 +308,8 @@
         },
         {
           "name": "handover",
-          "shape": 7,
           "type": "H3_CONTINUOUS_HANDOVER",
-          "link": 27
+          "link": 35
         },
         {
           "name": "last_frame",
@@ -364,22 +363,22 @@
           "links": null
         }
       ],
-      "title": "H3 Infinite v1.3 — Continue from Latent",
+      "title": "H3 Infinite v1.4 — Continue from Latent",
       "properties": {
-        "Node name for S&R": "H3ContinuousContinueV13",
+        "Node name for S&R": "H3ContinuousContinueV14",
         "cnr_id": "herrgotts-h3-infinite-continuation-suite",
-        "ver": "1.3.0"
+        "ver": "1.4.0"
       },
       "widgets_values": [
         "Prompt",
         736,
         1280,
         10.0,
-        "22",
-        "auto",
-        "phase_aligned_extended",
-        34,
-        "match"
+        "39",
+        0,
+        "match",
+        "Net New Content",
+        "Full Previous Tail"
       ]
     },
     {
@@ -811,7 +810,7 @@
         "Node name for S&R": "SaveVideo"
       },
       "widgets_values": [
-        "video/Herrgotts_H3_Infinite_v1.3",
+        "video/Herrgotts_H3_Infinite_v1.4",
         "auto",
         "auto"
       ],
@@ -907,7 +906,7 @@
       "properties": {
         "Node name for S&R": "H3ContinuousSaveLatent",
         "cnr_id": "herrgotts-h3-infinite-continuation-suite",
-        "ver": "1.3.0"
+        "ver": "1.4.0"
       },
       "widgets_values": [
         "h3_continuous/clip",
@@ -916,7 +915,7 @@
     },
     {
       "id": 22,
-      "type": "H3ContinuousAnalyzeHandoverV11",
+      "type": "H3ContinuousAnalyzeHandoverV14",
       "pos": [
         1610.0,
         760.0
@@ -980,18 +979,18 @@
           "links": null
         }
       ],
-      "title": "AUTO Handover — Balanced",
+      "title": "AUTO Handover — Render Freeze Trim — Balanced",
       "properties": {
-        "Node name for S&R": "H3ContinuousAnalyzeHandoverV11",
+        "Node name for S&R": "H3ContinuousAnalyzeHandoverV14",
         "cnr_id": "herrgotts-h3-infinite-continuation-suite",
-        "ver": "1.3.0"
+        "ver": "1.4.0"
       },
       "widgets_values": [
         "Balanced",
         72,
         8,
         3,
-        "22",
+        "39",
         192,
         0.012,
         0.025,
@@ -1009,7 +1008,7 @@
     },
     {
       "id": 23,
-      "type": "H3ContinuousStitchOutputV11",
+      "type": "H3ContinuousStitchOutputV14",
       "pos": [
         1600.0,
         300.0
@@ -1079,9 +1078,9 @@
       ],
       "title": "Output / Stitch — Stable Core",
       "properties": {
-        "Node name for S&R": "H3ContinuousStitchOutputV11",
+        "Node name for S&R": "H3ContinuousStitchOutputV14",
         "cnr_id": "herrgotts-h3-infinite-continuation-suite",
-        "ver": "1.3.0"
+        "ver": "1.4.0"
       },
       "widgets_values": [
         "Full"
@@ -1103,10 +1102,10 @@
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "title": "START HERE — Clip 2+ / v1.3 Continuation",
+      "title": "START HERE — Clip 2+ / v1.4 Continuation",
       "properties": {},
       "widgets_values": [
-        "# H3 Infinite v1.3 — Continuation Workflow\n\nUse this workflow for **Clip 2 and every later clip**.\n\n1. Set **Load Previous AV Latent** manually to the clip index saved by the previous run.\n2. Optionally load a new **Last Frame** and one or more **Qwen References**.\n3. Enter the next action/dialogue prompt in **Continue from Latent v1.3**.\n4. Keep `handover_mode = auto`, `alignment_mode = phase_aligned_extended`, and `context_frames = 22` for the recommended path.\n5. Queue the workflow. Motion and native audio history are injected directly from the previous AV latent.\n6. Save the new latent manually under the next clip index and repeat.\n\nThe new **Last Frame is optional**, so latent continuation can run without a new endpoint anchor. For long chains, however, supplying a fresh Last Frame is still recommended because each keyframe acts as a repeated visual target / **quality reset** that helps reduce drift.\n\nThe direct Input Latent is **not** a Qwen Picture. With Last Frame + Qwen Reference 1, the mapping is `Picture 1 = Last Frame`, `Picture 2 = Qwen Reference 1`.\n"
+        "# H3 Infinite v1.4 — Native Masked AV Continuation (v1.4)\n\nUse this workflow for **Clip 2 and every later clip**.\n\n**Requires a current ComfyUI build containing native PR #15375 H3 AV-mask support.**\n\n1. Load the full AV latent saved by the previous clip, including its `handover` metadata.\n2. Optionally connect a new **Last Frame** and one or more **Qwen References**.\n3. Enter the next prompt.\n4. Recommended defaults: `masked_context_frames = 39`, `audio_feather_ticks = 0`, `Duration Mode = Net New Content`, `Audio Tail Carryover = Full Previous Tail`.\n5. Queue. The video context is copied from the freeze/brightness-safe source window and hard-protected with the native mask.\n6. The audio context starts at the same source point but can remain protected through the previous clip's real audio ending, preserving dialogue/phoneme endings beyond the earlier visual cut.\n7. Save the new full latent under the next manual clip index and repeat.\n\nThe previous latent is **not** reconstructed as RoPE/guide keyframes and is not a Qwen Picture. It lives directly inside the new target latent."
       ],
       "color": "#1f4d3b",
       "bgcolor": "#2c6b52"
@@ -1154,7 +1153,7 @@
       "title": "INFO — Load previous latent",
       "properties": {},
       "widgets_values": [
-        "### Load Previous AV Latent\nLoads the full sampler-output **video + audio latent** and the handover metadata saved by the previous clip.\n\nSet `clip_index` manually to the previous clip (for example `1` when generating Clip 2). Manual indexing is intentionally retained because it is predictable and makes it easy to revisit or overwrite a specific branch of a chain.\n\nThe continuation node consumes the loaded latent directly — no decode/re-encode handover is used.\n"
+        "### Load Previous AV Latent + Handover\nLoads the complete sampler-output **video + audio latent** and its saved Auto Handover metadata.\n\nv1.4 needs both:\n- the latent supplies the actual video/audio tensors,\n- `handover` supplies the freeze/brightness-safe visual boundary selected for that accepted clip.\n\nKeep manual clip indices predictable: generating Clip 2 loads slot 1, Clip 3 loads slot 2, etc."
       ],
       "color": "#3f3f3f",
       "bgcolor": "#575757"
@@ -1199,10 +1198,10 @@
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "title": "INFO — Continue from Latent v1.3",
+      "title": "INFO — Continue from Latent v1.4",
       "properties": {},
       "widgets_values": [
-        "### Recommended continuation settings\n- `context_frames = 22`: requested minimum motion/audio history.\n- `handover_mode = auto`: use analyzer metadata.\n- `alignment_mode = phase_aligned_extended`: recommended; preserves a late cutoff but extends history backward to a canonical H3 phase.\n- `manual_landing_tail_frames`: only relevant to manual/fallback operation.\n\n`actual_head_context_frames` can be larger than 22. Connect that output to **Output / Stitch** so the exact reused overlap is removed from the rendered continuation.\n\nThe continuation core is unchanged from the proven v1.2 path. The v1.3 additions are flexible endpoint conditioning, Qwen Reference autogrow and explicit Picture mapping.\n\n**Prompting tip:** if a Last Frame is connected, describe the action as continuing through the segment rather than strongly instructing the model to settle into the Last Frame. Keep important dialogue away from the very end of a segment, where trimming may occur.\n\nFor Qwen References, refer to the `picture_map` rather than assuming a fixed number. If unwanted background music is a problem, try appending `non_diegetic_music: N/A`.\n"
+        "### Native Masked AV — v1.4 defaults\n- `masked_context_frames = 39` — recommended safe video context (~1.625 s). Larger exact choices remain 90 / 141 / 192 frames.\n- `audio_feather_ticks = 0` — recommended hard audio protection, especially for speech.\n- `Duration Mode = Net New Content` — **new default**. Duration means approximately how much newly generated visible video remains after the protected video head is removed. This samples a longer total latent and therefore increases sampling time versus `Total Generation`.\n- `Audio Tail Carryover = Full Previous Tail` — **new default**. Video still ends at the safe visual handover, while original audio may stay protected through the previous clip's actual end. This helps preserve word/phoneme endings that continue into visually discarded freeze/brightness frames.\n\nUse `Match Video Handover` to reproduce validated audio behavior for A/B testing.\n\nImportant limitation: audio carryover can only preserve audio that already exists in the previous latent. If the original clip itself ends mid-word, H3 still has to invent what comes after it."
       ],
       "color": "#3f3f3f",
       "bgcolor": "#575757"
@@ -1250,7 +1249,7 @@
       "title": "INFO — Auto Handover",
       "properties": {},
       "widgets_values": [
-        "### Auto Handover\nAnalyzes the new clip so it can itself become the source for the **next** continuation.\n\n`Balanced` is the validated default. `Motion Safe` uses a more conservative safety margin. If no end freeze is found, the no-lock fallback excludes the final `freeze_hold - 1` frames before phase alignment.\n"
+        "### One safe video boundary, independent audio tail\nv1.4 keeps the proven video logic:\n1. Detect the unusable FL2VA landing tail.\n2. Snap the safe visual cutoff backward to the latest exact Masked-AV video boundary.\n3. `Stitch Ready` cuts the previous video at that exact boundary.\n4. The next Continue protects the safe video context ending at exactly the same boundary.\n\nAudio is now allowed to continue farther than that visual boundary. This deliberately separates **where the picture is safe to cut** from **where useful speech actually ends**."
       ],
       "color": "#3f3f3f",
       "bgcolor": "#575757"
@@ -1274,7 +1273,7 @@
       "title": "INFO — Save next AV Latent",
       "properties": {},
       "widgets_values": [
-        "### Save the next full AV latent\nSave the sampler's complete video + audio latent together with Auto Handover **and `actual_head_context_frames`**. The Save node stores that head length in the `.safetensors` metadata so the clip can later be stitched automatically without reopening this generation graph.\n\nKeep one numbered prefix (`clip_00001`, `clip_00002`, ...) for the whole chain and set each clip index manually. This stable manual behavior is intentionally retained in v1.3.\n"
+        "### Save the next full AV latent\nSave the sampler's complete video + audio latent together with Auto Handover **and `actual_head_context_frames`**. The Save node stores that head length in the `.safetensors` metadata so the clip can later be stitched automatically without reopening this generation graph.\n\nKeep one numbered prefix (`clip_00001`, `clip_00002`, ...) for the whole chain and set each clip index manually. This stable manual behavior is intentionally retained in v1.4.\n"
       ],
       "color": "#3f3f3f",
       "bgcolor": "#575757"
@@ -1298,7 +1297,7 @@
       "title": "INFO — Output / Stitch modes",
       "properties": {},
       "widgets_values": [
-        "### Output / Stitch\nFor Clip 2+, choose the mode based on what happens next:\n\n**Stitch Ready** — use when another clip follows. It removes both `actual_head_context_frames` from the beginning and the tail after the effective handover cutoff.\n\n**Final Clip** — use on the last segment. It removes the reused head overlap but keeps the complete tail, including the final Last Frame landing.\n\n**Full** — no trimming at all; mainly useful for inspection/debugging.\n\nVideo and audio always use the same trim range. If you later extend a chain, change the previous `Final Clip` back to `Stitch Ready`.\n\n\nFor the smoothest final joins, use the **3-Clip Showcase** or the separate **04 — Stitch Saved Chain** workflow. Those use the retained full context for Safe Tail Bridge, a short context-aligned video blend and a 15 ms audio de-click crossfade instead of a hard concatenation.\n"
+        "### Output / Stitch\n**Stitch Ready** — intermediate segment. Removes the complete reused Masked-AV head plus the detector trim; it also handles soft final-state tails dynamically and otherwise uses the conservative 11-frame Balanced fallback.\n\n**Final Clip** — removes only the reused head and keeps the final segment's complete ending.\n\nWhen a previous freeze tail was removed, the v1.4 Seamless Join automatically shifts its crossfade anchor to the **time-corresponding earlier position inside the next protected 39-frame head**. The protected head itself is still completely removed from the final timeline."
       ],
       "color": "#66511f",
       "bgcolor": "#8a6d28"
@@ -1490,14 +1489,6 @@
       "LATENT"
     ],
     [
-      27,
-      5,
-      3,
-      8,
-      3,
-      "H3_CONTINUOUS_HANDOVER"
-    ],
-    [
       28,
       15,
       0,
@@ -1552,6 +1543,14 @@
       21,
       2,
       "INT"
+    ],
+    [
+      35,
+      5,
+      3,
+      8,
+      3,
+      "H3_CONTINUOUS_HANDOVER"
     ]
   ],
   "groups": [

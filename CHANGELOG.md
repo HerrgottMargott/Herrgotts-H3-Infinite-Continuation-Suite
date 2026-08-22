@@ -2,6 +2,59 @@
 
 Only major user-facing or technically important milestones are listed here. Experimental micro-iterations are intentionally omitted.
 
+## 1.4.0 — Native Masked AV continuation + independent dialogue tail
+
+- Uses the **live-validated freeze/brightness-safe video continuation path**: Auto Handover selects a freeze/brightness-safe visual endpoint, snaps it to the exact Masked-AV video boundary, and both Stitch Ready and the next protected video context use that same point.
+- Drops the Candidate-5 Alignment Recovery experiment. Live testing with `Balanced` showed visible motion/alignment errors, and the method did not add net-new timeline content because every recovered old frame required skipping a corresponding newly generated frame. The released v1.4 workflows expose no recovery mode.
+- Adds **Duration Mode** to v1.4 Continue and makes `Net New Content` the default. The node chooses the nearest legal H3 `17k+5` total so approximately the requested duration remains after the protected video head is removed. `Total Generation` preserves the old duration semantics. Net New Content samples a longer latent and therefore increases sampling time/memory.
+- Adds **Audio Tail Carryover** with `Full Previous Tail` as the default and `Match Video Handover` as the conservative A/B fallback. The protected video still stops at the safe visual boundary, while audio can remain hard-protected through the previous clip's actual remaining audio tail. This is intended to preserve dialogue/phoneme endings that continue into visually discarded freeze/brightness frames.
+- Keeps `audio_feather_ticks = 0` as the recommended dialogue setting and marks it Advanced. Safe Tail Bridge and luminance matching also remain as Advanced legacy/diagnostic fallbacks with v1.4 defaults off/zero.
+- Retains all legacy node class registrations and runtime-patch modules so existing v1.3/v1.2/older workflows do not break. A larger cleanup of those compatibility layers is deferred to a future breaking major release.
+- Live H3 testing confirmed the targeted visual seam and dialogue-tail cases before release.
+
+## 1.4.0-rc4 — Freeze-safe native Masked AV handover
+
+- Restores the original suite's key safety rule: continuation context is selected **before** the unusable FL2VA freeze / brightness landing instead of copying the true final latent tail.
+- Auto Handover now produces one shared boundary: hard-freeze / soft-final-state / conservative safety first determines a safe visual cutoff, then that cutoff is snapped backward to the latest exact native Masked-AV boundary.
+- `Stitch Ready` trims Clip N to that exact AV-compatible boundary, while Clip N+1 protects the 39-frame (or larger exact) AV context ending at the same boundary. This prevents a temporal mismatch between what is shown and what is reused.
+- Continue once again consumes the previous clip's `H3_CONTINUOUS_HANDOVER` metadata. Separate workflows receive it from `Load AV Latent`; the 3-clip showcase connects the previous analyzer directly.
+- Candidate 1-3 `true_final_tail` saved metadata remains stitchable through the existing offset compatibility path, but Candidate 4 generation requires a safe handover input.
+- Added v1.4 Qwen-reference frontend autogrow registration and regression coverage for the shared safe boundary.
+- Candidate 4 remains a **live testing** release candidate; the main validation target is freeze-free stitching with no temporal jump at the shared boundary.
+
+## 1.4.0-rc3 — Adaptive render freeze guard
+
+- Live testing of Candidate 2 showed that the fixed 7-frame No-Lock trim could still leave a few visible FL2VA freeze frames in the final stitched result.
+- Added a **soft final-state render guard**. The existing detector now exposes the earliest tail that already matches the final visual state even when the stricter residual-motion gate rejects it because of tiny shimmer/micro-motion.
+- `Stitch Ready` uses that soft candidate dynamically: it trims to just before the final-state-like tail plus the configured safety margin, without changing the Masked-AV continuation source.
+- If neither a hard freeze nor a soft final-state candidate is available, the render-only fallback is now one full `freeze_hold` plus `safety_margin` (11 frames with the Balanced defaults) instead of the fixed 7-frame Candidate-2 fallback.
+- The native Masked-AV Continue path remains unchanged: it still copies and protects the true final 39-frame AV latent tail. Crossfade anchoring continues to use the actual rendered tail trim, so removed freeze frames are not reintroduced through the next protected head.
+- Added regression coverage for soft-candidate metadata, adaptive render trimming and v1.4 analyzer wiring.
+
+## 1.4.0-rc2 — Render-only freeze safety for Masked AV
+
+- Live testing confirmed the native Masked-AV continuation path works, but Candidate 1 could still leave short FL2VA freeze tails in the stitched result when the detector did not confidently classify the ending as frozen.
+- Reintroduced the proven **hold-minus-one No-Lock safety** as a **render/stitch-only** fallback. With the default `freeze_hold = 8`, Stitch Ready removes 7 ending frames when no freeze is detected.
+- Crucially, this safety trim no longer changes the continuation source: the next v1.4 clip still receives the true final 39-frame AV latent tail via native masks. There is no latent phase snap and no additional cutoff loss.
+- The Masked-AV-aware stitcher already maps the render-tail trim back into the protected next head, so video/audio overlap remains time-aligned even though the visible previous clip ends a few frames earlier.
+- Detected freezes still use the detector's exact conservative pixel endpoint; the 7-frame fallback is applied only when no freeze lock is found.
+- `Final Clip` remains unchanged and keeps its complete tail by design. Use `Stitch Ready` for a final segment too if you explicitly want the safety trim applied to the very end of the finished video.
+- Added regression tests for the new render-only fallback; Candidate 2 automated suite: 94 tests.
+
+## 1.4.0-rc1 — Native Masked AV continuation
+
+- Added `H3ContinuousStartV14` and `H3ContinuousContinueV14`. Start keeps v1.3 flexible T2VA/I2VA/L2VA/FL2VA and Qwen Picture behavior; Continue switches the previous-clip handover to ComfyUI's native in-place video/audio denoise masks.
+- v1.4 Masked AV requires a **current ComfyUI build containing native PR #15375 H3 AV-mask support**. Candidate 1 capability-probes the live runtime instead of trusting the version string alone. No older-core compatibility shim is added for the new path; the registered v1.3 guide nodes remain available for legacy workflows and A/B comparison.
+- Continue now copies the **true final exact AV latent run** from the previous clip directly into the new target head and protects it from normal denoising. The protected context is not a Qwen Picture.
+- Added exact shared AV context lengths `39 / 90 / 141 / 192 / ...` frames (`39 + 51k`). The shipped workflows default to 39 frames (~1.625 s / 65 audio-latent ticks).
+- Added optional audio-mask feathering; Candidate 1 defaults to hard audio protection (`audio_feather_ticks = 0`). Nonzero release values remain experimental and follow the live ComfyUI H3 mask semantics.
+- Reworked v1.4 Auto Handover semantics: freeze detection remains, but it is now **render/stitch-only**. A detected freeze trims to the detector's safe pixel endpoint; if no freeze is found, the complete moving tail is preserved. The old no-lock fallback and latent phase cutoff are not used by v1.4.
+- Added Masked-AV-aware seam alignment. When a previous rendered freeze tail is trimmed, video/audio crossfade anchors shift to the time-corresponding earlier position inside the next protected context head while the full reused head is still removed from final duration.
+- Safe Tail Bridge defaults to `0` in v1.4 because native in-place continuation no longer loses rendered frames solely to guide-latent phase quantization. The legacy option remains available.
+- Added four v1.4 Candidate workflows and updated their in-canvas guidance for current ComfyUI builds containing PR #15375, 39-frame Masked AV context, Picture mapping and render-only Handover behavior.
+- Kept manual Save/Load clip indexing unchanged in Candidate 1.
+- Candidate 1 is **not yet live-model validated**; automated regression/static checks are intended to catch structural regressions before ComfyUI/H3 A/B testing.
+
 ## 1.3.0 — Flexible H3 conditioning and Qwen References
 
 - Added new `H3ContinuousStartV13` and `H3ContinuousContinueV13` class IDs while retaining all v1.2.x nodes unchanged for workflow compatibility.

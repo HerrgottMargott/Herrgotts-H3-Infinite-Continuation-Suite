@@ -1,4 +1,10 @@
 {
+  "H3ContinuousStartV14": "v1.4 flexible Start/Conditioning node. Start behavior remains v1.3-compatible; Native Masked AV is used for continuation only.",
+  "H3ContinuousContinueV14": "v1.4 Native Masked AV continuation: preserves the freeze/brightness-safe video context, defaults Duration to Net New Content, and can independently protect the previous full audio tail for dialogue continuity.",
+  "H3ContinuousAnalyzeHandoverV14": "v1.4 handover analyzer: detects the unusable final landing and snaps the safe visual endpoint to the exact Masked-AV video boundary shared by Stitch Ready and the next protected video context.",
+  "H3ContinuousStitchOutputV14": "v1.4 output helper using the exact safe video handover and actual protected video-head metadata; extended protected audio remains in the next visible body after normal head trim.",
+  "H3ContinuousSeamlessJoinV14": "v1.4 rendered AV join using the stable validated video boundary. Safe Tail Bridge/luminance matching remain Advanced legacy fallbacks; extended protected audio passes through naturally.",
+  "H3ContinuousStitchSavedChainV14": "v1.4 memory-bounded saved-chain stitcher using stable shared video boundaries while preserving extended protected audio tails and legacy saved-chain compatibility.",
   "H3ContinuousStartV13": "v1.3 flexible Start/Conditioning node with optional First/Last Frames, T2VA/I2VA/L2VA/FL2VA modes, auto-growing Qwen-only image references and picture-map diagnostics.",
   "H3ContinuousContinueV13": "v1.3 continuation node retaining the proven phase-aligned direct AV-latent handover while adding an optional Last Frame, auto-growing Qwen-only image references and picture-map diagnostics.",
   "H3ContinuousStartV11": "Release Start node for native MiniMax H3 FL2VA First/Last-Frame conditioning.",
