@@ -349,6 +349,31 @@ def snap_masked_av_context_length(requested: int, available: int, target_frames:
     return run
 
 
+def snap_existing_video_boundary(frame_count: int, boundary_frames: int = 39) -> int:
+    """Snap an existing video's pixel-frame count down to an exact joint AV value.
+
+    Returns the largest boundary ``boundary_frames + 51k`` (k = 0, 1, 2, ...) that
+    is ``<= frame_count``.  A Masked-AV boundary is a normal H3 video-VAE run
+    (17k+5 frames) that also ends on an integer 40 Hz audio-latent tick, so a clip
+    trimmed here continues on a clean shared video/audio grid.  Users pick a source
+    window (e.g. the final 39 frames) by pre-slicing the incoming clip.  Raises when
+    ``frame_count`` is too short to hold the requested boundary.
+    """
+    frame_count = int(frame_count)
+    boundary_frames = int(boundary_frames)
+    if boundary_frames not in (5, 22, 39):
+        raise ValueError("boundary_frames must be one of 5, 22, 39")
+    if frame_count < boundary_frames:
+        raise ValueError(
+            "Existing video has %s frames, fewer than the %s-frame AV boundary; "
+            "supply a clip at least %s frames long" % (frame_count, boundary_frames, boundary_frames)
+        )
+    run = boundary_frames + ((frame_count - boundary_frames) // 51) * 51
+    if run > frame_count:
+        raise RuntimeError("Internal existing-video boundary snap failed")
+    return run
+
+
 def masked_av_context_slice(
     video_latent_t: int,
     context_frames: int,

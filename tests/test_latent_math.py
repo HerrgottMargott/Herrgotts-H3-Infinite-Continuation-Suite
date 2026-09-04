@@ -199,3 +199,60 @@ def test_candidate6_audio_tail_policy_rejects_unknown_mode():
     from latent_math import masked_av_audio_context_plan
     with pytest.raises(ValueError):
         masked_av_audio_context_plan(207, 68, 107, 124, "invented")
+
+
+def test_existing_video_boundary_snaps_to_39_plus_51k():
+    from latent_math import snap_existing_video_boundary
+    # Exact boundaries: 39, 90, 141, 192, 243, 294, 345, 396, 447, 498.
+    assert snap_existing_video_boundary(243) == 243
+    assert snap_existing_video_boundary(39) == 39
+    assert snap_existing_video_boundary(90) == 90
+    # Non-boundary lengths snap down to the largest 39+51k <= frame_count.
+    assert snap_existing_video_boundary(124) == 90
+    assert snap_existing_video_boundary(100) == 90
+    assert snap_existing_video_boundary(40) == 39
+    assert snap_existing_video_boundary(89) == 39
+    assert snap_existing_video_boundary(252) == 243
+    assert snap_existing_video_boundary(500) == 498
+
+
+def test_existing_video_boundary_smaller_boundaries():
+    from latent_math import snap_existing_video_boundary
+    assert snap_existing_video_boundary(22, boundary_frames=22) == 22
+    assert snap_existing_video_boundary(39, boundary_frames=22) == 22
+    assert snap_existing_video_boundary(5, boundary_frames=5) == 5
+    assert snap_existing_video_boundary(22, boundary_frames=5) == 5   # 22 is not on the 5+51k grid
+    assert snap_existing_video_boundary(56, boundary_frames=22) == 22  # 73 > 56
+    assert snap_existing_video_boundary(124, boundary_frames=22) == 124
+
+
+def test_existing_video_boundary_short_clip_raises():
+    import pytest
+    from latent_math import snap_existing_video_boundary
+    with pytest.raises(ValueError):
+        snap_existing_video_boundary(20, boundary_frames=39)
+    with pytest.raises(ValueError):
+        snap_existing_video_boundary(4, boundary_frames=5)
+    with pytest.raises(ValueError):
+        snap_existing_video_boundary(50, boundary_frames=17)  # only 5/22/39 allowed
+
+
+def test_existing_video_boundary_handover_continues_from_absolute_end():
+    # The H3ContinuousTrimToBoundary node emits a handover with frame_count == the
+    # exact AV-boundary run and handover_end_frame == run - 1 (continue from the
+    # clip's absolute end). That combined with the default 39f context must satisfy
+    # H3ContinuousContinueV14's alignment check for every valid boundary size.
+    from latent_math import (
+        snap_existing_video_boundary, video_latent_t, pixel_frames,
+        masked_av_context_slice,
+    )
+    for source_frames in (39, 90, 141, 192, 243, 294, 498, 500, 252):
+        run = snap_existing_video_boundary(source_frames, 39)
+        assert run == 39 + 51 * ((source_frames - 39) // 51)
+        safe_end = run - 1  # handover_end_frame
+        vt = video_latent_t(run)
+        assert pixel_frames(vt) == run
+        sl = masked_av_context_slice(vt, 39, 100000, ideal_last_frame=safe_end)
+        assert int(sl["source_end_frame"] - 1) == safe_end
+        assert safe_end >= 38
+        assert safe_end < run

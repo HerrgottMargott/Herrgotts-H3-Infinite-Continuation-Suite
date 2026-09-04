@@ -2,6 +2,7 @@ import json
 import logging
 import math
 import os
+from collections.abc import Mapping
 
 import torch
 from safetensors import safe_open
@@ -18,6 +19,7 @@ from .latent_math import (
     FPS, AUDIO_HZ, FRAME_RESCALE, CONTEXT_TO_STEPS,
     temporal_shape, pixel_frames, video_latent_t, context_slice, phase_aware_context_slice, phase_aligned_extended_context_slice,
     masked_av_context_slice, audio_slice_for_pixel_window, masked_av_audio_context_plan,
+    snap_existing_video_boundary,
 )
 from .patch_layout import HC_INDEX, HC_AUDIO_END_FRAME, LEGACY_LAYOUT_MODE, NATIVE_LAYOUT_MODE
 from .runtime_patches import ensure_h3_runtime_patches
@@ -728,8 +730,8 @@ class H3ContinuousSaveLatent:
                 }),
             },
         }
-    RETURN_TYPES = ("STRING", "STRING")
-    RETURN_NAMES = ("latent_path", "latent_info")
+    RETURN_TYPES = ("STRING", "STRING", "INT", "INT")
+    RETURN_NAMES = ("latent_path", "latent_info", "frame_count", "head_context_frames")
     FUNCTION = "save"
     OUTPUT_NODE = True
     CATEGORY = "H3 Continuous"
@@ -792,7 +794,7 @@ class H3ContinuousSaveLatent:
             f"head context {head_context_frames} | {handover_summary}"
         )
         _LOG.info("h3_continuous: saved %s (%s)", path, info)
-        return (path, info)
+        return (path, info, frame_count, head_context_frames)
 
 
 def _resolve_latent_path(path, clip_index):
@@ -888,6 +890,69 @@ class H3ContinuousLoadLatent:
         info = f"{frame_count} frames | video {tuple(video.shape)} | audio {tuple(audio.shape)} | {head_info}{hinfo}"
         _LOG.info("h3_continuous: loaded %s (%s)", path, info)
         return (latent, path, info, handover)
+
+
+class H3ContinuousTrimToBoundary:
+    """Trim an existing video (and optional aligned audio) to the largest exact
+    joint-Masked-AV boundary so it can be VAE-encoded and saved for clean continuation."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "video": ("IMAGE", {"tooltip": "Existing video frames [N,H,W,C] (channel-last IMAGE). The trailing run up to the boundary is kept."}),
+                "boundary_frames": ("INT", {"default": 39, "min": 5, "max": 39, "step": 17,
+                    "tooltip": "Smallest Masked-AV head context to keep. 39 (default) is the recommended exact 24fps/40Hz video+audio boundary."}),
+            },
+            "optional": {
+                "audio": ("AUDIO", {"tooltip": "Optional audio track aligned to `video` (AUDIO dict with waveform/sample_rate). Trimmed to match the chosen boundary."}),
+                "max_frames": ("INT", {"forceInput": True,
+                    "tooltip": "Optional hard cap on usable trailing frames. Connect the source video frame count (e.g. VHS_VideoInfo) to stop the boundary before the animation end."}),
+            },
+        }
+    RETURN_TYPES = ("IMAGE", "AUDIO", "INT", "INT", "H3_CONTINUOUS_HANDOVER")
+    RETURN_NAMES = ("video", "audio", "frame_count", "trimmed_frames", "handover")
+    FUNCTION = "trim"
+    CATEGORY = "H3 Continuous"
+    DESCRIPTION = "Trim an existing video (and optional aligned audio) down to the largest exact joint 24fps/40Hz Masked-AV boundary (39 + 51k frames) so the result can be VAE-encoded and saved for clean continuation. Also emits a valid H3 handover that continues from the trimmed clip's absolute end. Feed the video/audio outputs into VAEEncode / VAEEncodeAudio, concat with LTXVConcatAVLatent, then save with H3ContinuousSaveLatent passing this handover."
+
+    def trim(self, video, boundary_frames=39, audio=None, max_frames=None):
+        if getattr(video, "ndim", 0) != 4:
+            raise ValueError("h3_continuous: existing video must be IMAGE [N,H,W,C]")
+        cap = min(int(video.shape[0]), int(max_frames) if max_frames else int(video.shape[0]))
+        run = snap_existing_video_boundary(cap, int(boundary_frames))
+        video_out = video[-run:]
+        trimmed = int(video.shape[0]) - run
+        run = int(run)
+        handover = {
+            "available": True,
+            "frame_count": run,
+            "handover_end_frame": run - 1,
+            "landing_tail_frames": 0,
+            "legacy_landing_tail_frames": 0,
+            "freeze_detected": False,
+            "source": "external_video_av_boundary",
+        }
+
+        audio_out = audio
+        if audio is not None:
+            if not isinstance(audio, Mapping) or "waveform" not in audio or "sample_rate" not in audio:
+                raise ValueError("h3_continuous: optional `audio` must be an AUDIO dict (waveform/sample_rate)")
+            waveform = audio["waveform"]
+            if waveform.ndim < 2:
+                raise ValueError("h3_continuous: audio waveform must be [B,C,L]")
+            sr = int(audio["sample_rate"])
+            context_samples = int(round(run / FPS * sr))
+            if waveform.shape[-1] < context_samples:
+                raise ValueError(
+                    "h3_continuous: audio (%s samples @ %s Hz) is shorter than the %s-frame "
+                    "video boundary needs (%s samples); make them the same duration"
+                    % (waveform.shape[-1], sr, run, context_samples)
+                )
+            audio_out = dict(audio)
+            audio_out["waveform"] = waveform[..., -context_samples:]
+
+        return (video_out, audio_out, int(run), trimmed, handover)
 
 
 class H3ContinuousAnalyzeHandover:
@@ -2684,6 +2749,7 @@ NODE_CLASS_MAPPINGS = {
     "H3ContinuousSaveLatent": H3ContinuousSaveLatent,
     "H3ContinuousLoadLatent": H3ContinuousLoadLatent,
     "H3ContinuousLatentInfo": H3ContinuousLatentInfo,
+    "H3ContinuousTrimToBoundary": H3ContinuousTrimToBoundary,
     # v0.x compatibility
     "H3ContinuousStart": H3ContinuousStart,
     "H3ContinuousContinue": H3ContinuousContinue,
@@ -2709,6 +2775,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "H3ContinuousSaveLatent": "H3 Infinite - Save AV Latent",
     "H3ContinuousLoadLatent": "H3 Infinite - Load AV Latent",
     "H3ContinuousLatentInfo": "H3 Infinite - Latent Info",
+    "H3ContinuousTrimToBoundary": "H3 Infinite - Trim Existing Video to AV Boundary",
     "H3ContinuousStartV1": "H3 Continuous - Start FFLF (Legacy v1.0)",
     "H3ContinuousContinueV1": "H3 Continuous - Continue from Latent (Legacy v1.0)",
     "H3ContinuousAnalyzeHandoverV1": "H3 Continuous - Auto Handover Analyzer (Legacy v1.0)",

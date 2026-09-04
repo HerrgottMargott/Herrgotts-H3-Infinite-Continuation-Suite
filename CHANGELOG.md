@@ -2,6 +2,12 @@
 
 Only major user-facing or technically important milestones are listed here. Experimental micro-iterations are intentionally omitted.
 
+## 1.4.1 — Encode an existing video and continue from it
+
+- Adds **`H3ContinuousTrimToBoundary`**: snaps an existing/loaded video (and optional aligned audio) down to the largest exact joint 24 fps / 40 Hz Masked-AV boundary (`39 + 51k` frames) so the result lands on a clean shared video/audio grid that the continuation nodes can work with cleanly.
+- Adds the **`Herrgotts_H3_Infinite_v1.4_05_EncodeExistingVideo.json`** example workflow: `VHS_LoadVideo -> TrimToBoundary -> VAEEncode (H3 video VAE) + VAEEncodeAudio (H3 audio VAE) -> LTXVConcatAVLatent -> H3ContinuousSaveLatent`. This produces a `.safetensors` identical to a normally saved clip, which `H3ContinuousLoadLatent` reloads for continuation.
+- `H3ContinuousTrimToBoundary` now also emits a valid H3 handover that continues from the trimmed clip's absolute end. Wiring that handover into `H3ContinuousSaveLatent` stores it with the clip, so the reloaded latent carries continuation metadata that `H3ContinuousContinueV14` accepts automatically — the manual `landing_tail_frames` workaround is no longer required. Resolution must still match the continuation target.
+
 ## 1.4.0 — Native Masked AV continuation + independent dialogue tail
 
 - Uses the **live-validated freeze/brightness-safe video continuation path**: Auto Handover selects a freeze/brightness-safe visual endpoint, snaps it to the exact Masked-AV video boundary, and both Stitch Ready and the next protected video context use that same point.
