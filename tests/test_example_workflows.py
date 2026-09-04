@@ -26,6 +26,7 @@ def test_expected_v14_workflows_are_shipped_and_valid_json():
         "Herrgotts_H3_Infinite_v1.4_02_Continue.json",
         "Herrgotts_H3_Infinite_v1.4_03_3Clip_Showcase_AutoStitch.json",
         "Herrgotts_H3_Infinite_v1.4_04_Stitch_Saved_Chain.json",
+        "Herrgotts_H3_Infinite_v1.4_05_EncodeExistingVideo.json",
     ]
     for path in WORKFLOWS:
         data = _load(path)
@@ -262,3 +263,50 @@ def test_candidate6_v14_fallback_seam_controls_are_advanced_in_source_contract()
         assert 'required["luminance_match"]' in block
         assert '"advanced": True' in block
         assert 'required["max_safe_tail_bridge_frames"]' in block
+
+
+def test_encode_existing_video_workflow_trims_encodes_and_saves():
+    data = _load(EXAMPLES / "Herrgotts_H3_Infinite_v1.4_05_EncodeExistingVideo.json")
+    types = [n.get("type") for n in data["nodes"]]
+
+    assert "H3ContinuousTrimToBoundary" in types
+    assert "H3ContinuousSaveLatent" in types
+    assert "VAEEncode" in types
+    assert "VAEEncodeAudio" in types
+    assert "LTXVConcatAVLatent" in types
+
+    def by_type(node_type):
+        return next(n for n in data["nodes"] if n.get("type") == node_type)
+
+    trim = by_type("H3ContinuousTrimToBoundary")
+    assert trim.get("widgets_values") == [39]
+
+    save = by_type("H3ContinuousSaveLatent")
+    assert save.get("widgets_values")[-1] == 1
+
+    concat_inputs = [i.get("name") for i in by_type("LTXVConcatAVLatent").get("inputs", [])]
+    assert concat_inputs == ["video_latent", "audio_latent"]
+
+    # The concat output feeds the save node's latent input.
+    assert next(i for i in save["inputs"] if i.get("name") == "latent").get("link") is not None
+    concat = by_type("LTXVConcatAVLatent")
+    save_latent_link = next(i for i in save["inputs"] if i.get("name") == "latent")["link"]
+    concat_latent_links = next(o for o in concat["outputs"] if o.get("name") == "latent")["links"]
+    assert save_latent_link == concat_latent_links[0]
+
+    # The trim node emits a handover that feeds the save node so a later
+    # H3ContinuousLoadLatent returns valid metadata for H3ContinuousContinueV14.
+    save_handover_link = next(i for i in save["inputs"] if i.get("name") == "handover")["link"]
+    assert save_handover_link is not None
+    trim_handover_links = next(o for o in trim["outputs"] if o.get("name") == "handover")["links"]
+    assert save_handover_link == trim_handover_links[0]
+
+
+def test_trim_node_accepts_mapping_audio_not_just_dict():
+    source = (ROOT / "nodes.py").read_text(encoding="utf-8")
+    block = source.split("class H3ContinuousTrimToBoundary", 1)[1].split("class H3ContinuousAnalyzeHandover", 1)[0]
+    # VHS returns a lazily-evaluated Mapping (LazyAudioMap), not a plain dict.
+    assert "collections.abc" in source
+    assert "Mapping" in block
+    assert 'isinstance(audio, Mapping)' in block
+    assert '"waveform" not in audio' in block

@@ -127,7 +127,7 @@ SageAttention is **not required** for continuation. If it causes instability or 
 
 ### Included workflows
 
-The `examples/` folder contains four annotated v1.4 workflows:
+The `examples/` folder contains five annotated v1.4 workflows:
 
 **1. Start — `Herrgotts_H3_Infinite_v1.4_01_Start.json`**  
 Creates Clip 1 with flexible T2VA/I2VA/L2VA/FL2VA conditioning. First/Last Frames are optional; the example keeps First + Last connected because repeated endpoints are the recommended quality-reset workflow.
@@ -140,6 +140,9 @@ Runs Start -> Masked Continue -> Masked Continue in one queue and automatically 
 
 **4. Stitch Saved Chain — `Herrgotts_H3_Infinite_v1.4_04_Stitch_Saved_Chain.json`**  
 Combines manually numbered clips generated separately. The stitcher decodes one saved AV latent at a time, so peak memory does not scale like one giant decoded all-clips batch. v1.4 chains use the exact shared video boundary; older experimental v1.4 metadata still retains its compatibility offset path.
+
+**5. Encode Existing Video — `Herrgotts_H3_Infinite_v1.4_05_EncodeExistingVideo.json`**  
+Encodes any external/loaded video (video + optional audio) into an H3 AV latent and saves it with `H3ContinuousSaveLatent`. Frames are first snapped to an exact joint 24 fps/40 Hz Masked-AV boundary (39 + 51k frames) via `H3ContinuousTrimToBoundary`, then VAE-encoded through the H3 video/audio VAEs and combined with `LTXVConcatAVLatent`. The trim node also emits a valid H3 handover that continues from the trimmed clip's absolute end; wire it into `H3ContinuousSaveLatent` so the saved file carries continuation metadata. The saved file can then be reloaded with `H3ContinuousLoadLatent` and continued directly from the Continue workflow — the reloaded handover is accepted automatically, with no manual `landing_tail_frames` required.
 
 See [`examples/README.md`](examples/README.md) for a compact workflow guide.
 

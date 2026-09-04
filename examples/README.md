@@ -56,6 +56,22 @@ The stable shared video seam is used throughout. Later-frame recovery is intenti
 
 For long projects generated clip-by-clip. It decodes one saved AV latent at a time, uses the saved safe video boundary/head metadata, and preserves extended audio tails automatically. Peak memory stays tied roughly to one decoded clip rather than the whole chain. Older v1.3 and experimental v1.4 metadata remain supported for compatibility.
 
+## 5. `Herrgotts_H3_Infinite_v1.4_05_EncodeExistingVideo.json`
+
+Encodes an existing/loaded video (video + optional audio) into an H3 AV latent so it can be saved and continued from. The workflow:
+
+```text
+VHS_LoadVideo
+→ H3ContinuousTrimToBoundary  (snap to exact 39 + 51k-frame joint AV boundary)
+  → VAEEncode (H3 video VAE)      → video latent  [1,24,T,H/16,W/16]
+  → VAEEncodeAudio (H3 audio VAE) → audio latent  [1,32,2,T]
+  → handover  (continues from the trimmed clip's absolute end)
+→ LTXVConcatAVLatent  (video + audio → joint NestedTensor AV latent)
+→ H3ContinuousSaveLatent (handover included)  → h3_continuous/clip_00001.safetensors
+```
+
+Continuation side: reload with `H3ContinuousLoadLatent` and feed the Continue workflow. The trim node's handover is saved with the clip, so the reloaded latent carries valid continuation metadata for `H3ContinuousContinueV14` — no manual `landing_tail_frames` is needed. The frame count must match the continuation target's resolution, and is already snapped to a clean 24 fps / 40 Hz boundary by the trim node.
+
 ## Dialogue testing
 
 For speech, keep `audio_feather_ticks = 0`. A useful A/B test is a clip whose video becomes unusable before a spoken word has fully finished:

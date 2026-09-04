@@ -15,6 +15,7 @@
   "H3ContinuousStitchSavedChainV11": "Release memory-bounded stitcher for separately saved H3 AV latent chains.",
   "H3ContinuousSaveLatent": "Save a complete H3 video/audio latent plus continuation and stitch metadata.",
   "H3ContinuousLoadLatent": "Load a previously saved H3 video/audio latent plus metadata.",
+  "H3ContinuousTrimToBoundary": "Trim an existing video (and optional aligned audio) down to an exact joint 24fps/40Hz Masked-AV boundary so it can be VAE-encoded and saved for clean continuation. Also emits an H3 handover that continues from the trimmed clip's absolute end; feed it to H3ContinuousSaveLatent so the saved clip carries valid continuation metadata.",
   "H3ContinuousLatentInfo": "Inspect basic information stored in a current or saved H3 AV latent.",
   "H3ContinuousStartV1": "Legacy v1.0 Start node kept for workflow compatibility.",
   "H3ContinuousContinueV1": "Legacy v1.0 continuation node kept for workflow compatibility.",
